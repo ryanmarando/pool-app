@@ -210,7 +210,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   heroText: {
-    marginTop: 10,
+    marginTop: 11,
     fontSize: 24,
     fontWeight: "bold",
     textAlign: "center",
