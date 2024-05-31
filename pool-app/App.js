@@ -1,46 +1,71 @@
+import React from "react";
 import { StyleSheet } from "react-native";
 import { Provider as PaperProvider } from "react-native-paper";
 import { NavigationContainer } from "@react-navigation/native";
 import BottomTabNavigator from "./components/BottomTabNavigator";
-import ProfilePage from "./components/ProfilePage";
-import { createStackNavigator } from "@react-navigation/stack";
+import {
+  createStackNavigator,
+  TransitionPresets,
+} from "@react-navigation/stack";
+import { AuthProvider, useAuth } from "./AuthContext";
 import HomeScreen from "./components/HomeScreen";
 import TournamentMapPage from "./components/TournamentMapPage";
 import FindTeamsPage from "./components/FindTeamPage";
+import ProfileScreen from "./components/ProfilePage";
+import SignInPage from "./components/SignInPage";
+import SignUpPage from "./components/SignUpPage";
 
 const Stack = createStackNavigator();
 
+const AppNavigator = () => {
+  const { user } = useAuth();
+
+  return (
+    <Stack.Navigator initialRouteName="Home">
+      <Stack.Screen
+        name="Home"
+        component={HomeScreen}
+        options={{ headerShown: false, ...TransitionPresets.SlideFromRightIOS }}
+      />
+      <Stack.Screen
+        name="Profile"
+        component={user ? ProfileScreen : SignInPage}
+        options={{ headerShown: false, ...TransitionPresets.SlideFromRightIOS }}
+      />
+      <Stack.Screen
+        name="FullMap"
+        component={TournamentMapPage}
+        options={{ headerShown: false, ...TransitionPresets.SlideFromRightIOS }}
+      />
+      <Stack.Screen
+        name="FindTeam"
+        component={FindTeamsPage}
+        options={{ headerShown: false, ...TransitionPresets.SlideFromRightIOS }}
+      />
+      <Stack.Screen
+        name="SignIn"
+        component={SignInPage}
+        options={{ headerShown: false, ...TransitionPresets.SlideFromRightIOS }}
+      />
+      <Stack.Screen
+        name="SignUp"
+        component={SignUpPage}
+        options={{ headerShown: false, ...TransitionPresets.SlideFromRightIOS }}
+      />
+    </Stack.Navigator>
+  );
+};
+
 const App = () => {
   return (
-    <PaperProvider>
-      <NavigationContainer>
-        <Stack.Navigator initialRouteName="Home">
-          <Stack.Screen
-            name="Home"
-            options={{
-              headerShown: false,
-            }}
-            component={HomeScreen}
-          />
-          <Stack.Screen
-            name="Profile"
-            options={{ headerShown: false }}
-            component={ProfilePage}
-          />
-          <Stack.Screen
-            name="FullMap"
-            options={{ headerShown: false }}
-            component={TournamentMapPage}
-          ></Stack.Screen>
-          <Stack.Screen
-            name="FindTeam"
-            options={{ headerShown: false }}
-            component={FindTeamsPage}
-          ></Stack.Screen>
-        </Stack.Navigator>
-        <BottomTabNavigator />
-      </NavigationContainer>
-    </PaperProvider>
+    <AuthProvider>
+      <PaperProvider>
+        <NavigationContainer>
+          <AppNavigator />
+          <BottomTabNavigator />
+        </NavigationContainer>
+      </PaperProvider>
+    </AuthProvider>
   );
 };
 
