@@ -1,13 +1,30 @@
-// TournamentMapPage.js
 import React, { useState, useEffect } from "react";
-import { View, StyleSheet, ActivityIndicator, Text } from "react-native";
+import {
+  View,
+  StyleSheet,
+  ActivityIndicator,
+  Text,
+  Button,
+  Modal,
+  TextInput,
+} from "react-native";
 import MapView, { Marker } from "react-native-maps";
 import * as Location from "expo-location";
+import { doc, setDoc, collection, getDocs } from "firebase/firestore";
+import { db } from "../firebaseConfig";
+import axios from "axios";
 
 const TournamentMapPage = () => {
   const [location, setLocation] = useState(null);
   const [tournamentLocations, setTournamentLocations] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [newTournament, setNewTournament] = useState({
+    title: "",
+    description: "",
+    latitude: "",
+    longitude: "",
+  });
 
   useEffect(() => {
     (async () => {
@@ -24,31 +41,65 @@ const TournamentMapPage = () => {
   }, []);
 
   useEffect(() => {
-    // Set up tournament locations
-    setTournamentLocations([
-      {
-        id: 1,
-        title: "Championship Tournament",
-        description: "The annual championship tournament.",
-        latitude: 34.052235,
-        longitude: -118.243683,
-      },
-      {
-        id: 2,
-        title: "Regional Qualifier",
-        description: "The regional qualifying event.",
-        latitude: 40.712776,
-        longitude: -74.005974,
-      },
-      {
-        id: 3,
-        title: "City League",
-        description: "The city league tournament.",
-        latitude: 37.774929,
-        longitude: -122.419418,
-      },
-    ]);
+    // Fetch tournament locations from Firestore when component mounts
+    fetchTournamentLocations();
   }, []);
+
+  const fetchTournamentLocations = async () => {
+    try {
+      const querySnapshot = await getDocs(
+        collection(db, "tournamentLocations")
+      );
+      const locations = querySnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      setTournamentLocations(locations);
+      console.log("loaded places");
+    } catch (error) {
+      console.error("Error fetching tournament locations:", error);
+    }
+  };
+
+  const handleAddTournament = async () => {
+    try {
+      const response = await axios.get(
+        `https://maps.googleapis.com/maps/api/geocode/json?address=${newTournament.location}&AIzaSyAikQ-XwdscIumcQZH4tj5lNLGl7aI3AZc`
+      );
+
+      const { results } = response.data;
+      if (results.length > 0) {
+        const { lat, lng } = results[0].geometry.location;
+        const id = Math.floor(Math.random() * 1000000);
+        const locationData = {
+          id: id,
+          title: newTournament.title,
+          description: newTournament.description,
+          latitude: lat,
+          longitude: lng,
+        };
+
+        // Create a reference to a new document with the generated ID
+        const locationRef = doc(db, "tournamentLocations", id.toString());
+
+        // Set the document data, merging with existing data if the document already exists
+        await setDoc(locationRef, locationData, { merge: true });
+
+        console.log("Location added successfully");
+        setModalVisible(false);
+        fetchTournamentLocations();
+        setNewTournament({
+          title: "",
+          description: "",
+          location: "", // Add Location property to newTournament state
+        });
+      } else {
+        console.error("Location not found");
+      }
+    } catch (error) {
+      console.error("Error adding tournament location:", error);
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -62,34 +113,78 @@ const TournamentMapPage = () => {
         </View>
       ) : (
         location && (
-          <MapView
-            style={styles.map}
-            initialRegion={{
-              latitude: location.coords.latitude,
-              longitude: location.coords.longitude,
-              latitudeDelta: 0.0922,
-              longitudeDelta: 0.0421,
-            }}
-          >
-            <Marker
-              coordinate={{
+          <>
+            <MapView
+              style={styles.map}
+              initialRegion={{
                 latitude: location.coords.latitude,
                 longitude: location.coords.longitude,
+                latitudeDelta: 0.0922,
+                longitudeDelta: 0.0421,
               }}
-              title="Your Location"
-            />
-            {tournamentLocations.map((loc) => (
+            >
               <Marker
-                key={loc.id}
                 coordinate={{
-                  latitude: loc.latitude,
-                  longitude: loc.longitude,
+                  latitude: location.coords.latitude,
+                  longitude: location.coords.longitude,
                 }}
-                title={loc.title}
-                description={loc.description}
+                title="Your Location"
               />
-            ))}
-          </MapView>
+              {tournamentLocations.map((loc) => (
+                <Marker
+                  key={loc.id}
+                  coordinate={{
+                    latitude: loc.latitude,
+                    longitude: loc.longitude,
+                  }}
+                  title={loc.title}
+                  description={loc.description}
+                />
+              ))}
+            </MapView>
+            <Button
+              title="Add Tournament Location"
+              onPress={() => setModalVisible(true)}
+            />
+            <Modal
+              animationType="slide"
+              transparent={true}
+              visible={modalVisible}
+              onRequestClose={() => setModalVisible(false)}
+            >
+              <View style={styles.modalView}>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Title"
+                  placeholderTextColor="#333" // Darker placeholder color
+                  value={newTournament.title}
+                  onChangeText={(text) =>
+                    setNewTournament({ ...newTournament, title: text })
+                  }
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Description"
+                  placeholderTextColor="#333" // Darker placeholder color
+                  value={newTournament.description}
+                  onChangeText={(text) =>
+                    setNewTournament({ ...newTournament, description: text })
+                  }
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Location"
+                  placeholderTextColor="#333" // Darker placeholder color
+                  value={newTournament.location}
+                  onChangeText={(text) =>
+                    setNewTournament({ ...newTournament, location: text })
+                  }
+                />
+                <Button title="Add Location" onPress={handleAddTournament} />
+                <Button title="Cancel" onPress={() => setModalVisible(false)} />
+              </View>
+            </Modal>
+          </>
         )
       )}
     </View>
@@ -108,6 +203,29 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: 20,
+  },
+  modalView: {
+    margin: 20,
+    backgroundColor: "white",
+    borderRadius: 20,
+    padding: 35,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  input: {
+    height: 40,
+    borderColor: "gray",
+    borderWidth: 1,
+    marginBottom: 12,
+    width: "100%",
+    paddingLeft: 8,
   },
 });
 
