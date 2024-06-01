@@ -9,50 +9,52 @@ import {
   Provider as PaperProvider,
 } from "react-native-paper";
 import MapView, { Marker } from "react-native-maps";
+import { collection, getDocs } from "firebase/firestore";
 import * as Location from "expo-location";
-
-const tournamentLocations = [
-  {
-    id: 1,
-    title: "Championship Tournament",
-    description: "The annual championship tournament.",
-    latitude: 34.052235,
-    longitude: -118.243683,
-  },
-  {
-    id: 2,
-    title: "Regional Qualifier",
-    description: "The regional qualifying event.",
-    latitude: 40.712776,
-    longitude: -74.005974,
-  },
-  {
-    id: 3,
-    title: "City League",
-    description: "The city league tournament.",
-    latitude: 37.774929,
-    longitude: -122.419418,
-  },
-];
+import { db } from "../firebaseConfig";
 
 const HomeScreen = () => {
   const [location, setLocation] = useState(null);
   const [errorMsg, setErrorMsg] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [selectedLocation, setSelectedLocation] = useState(null);
+  const [tournamentLocations, setTournamentLocations] = useState([]);
 
   useEffect(() => {
     (async () => {
       let { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") {
-        setErrorMsg("Permission to access location was denied");
+        console.error("Permission to access location was denied");
         return;
       }
 
       let location = await Location.getCurrentPositionAsync({});
       setLocation(location);
+      setLoading(false); // Set loading to false when location is obtained
     })();
   }, []);
+
+  useEffect(() => {
+    // Fetch tournament locations from Firestore when component mounts
+    fetchTournamentLocations();
+  }, []);
+
+  const fetchTournamentLocations = async () => {
+    try {
+      const querySnapshot = await getDocs(
+        collection(db, "tournamentLocations")
+      );
+      const locations = querySnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      setTournamentLocations(locations);
+      console.log("loaded places");
+    } catch (error) {
+      console.error("Error fetching tournament locations:", error);
+    }
+  };
 
   const handleMarkerPress = (location) => {
     setSelectedLocation(location);

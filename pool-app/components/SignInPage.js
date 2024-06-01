@@ -9,16 +9,15 @@ import {
   Portal,
   Paragraph,
 } from "react-native-paper";
-import { useAuth } from "../AuthContext";
-import { getFirestore, doc, setDoc } from "firebase/firestore";
-import app from "../firebaseConfig"; // Import your firebaseConfig
+import { signInWithEmailAndPassword } from "firebase/auth";
+import { auth } from "../firebaseConfig";
 
 const SignInPage = ({ navigation }) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [visible, setVisible] = useState(false);
-  const { signIn } = useAuth();
+  //const { signIn } = useAuth();
 
   const showDialog = () => {
     setVisible(true);
@@ -33,7 +32,7 @@ const SignInPage = ({ navigation }) => {
     }
 
     try {
-      await signIn(email, password);
+      await signInWithEmailAndPassword(auth, email, password);
       console.log("After sign-in (success)");
     } catch (err) {
       setError(err.message);
@@ -89,6 +88,7 @@ const styles = StyleSheet.create({
     padding: 16,
     justifyContent: "center",
     backgroundColor: "#f5f5f5",
+    marginBottom: 125,
   },
   title: {
     fontSize: 24,

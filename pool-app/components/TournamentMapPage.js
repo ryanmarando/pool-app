@@ -8,7 +8,7 @@ import {
   Modal,
   TextInput,
 } from "react-native";
-import MapView, { Marker } from "react-native-maps";
+import MapView, { Marker, Callout } from "react-native-maps";
 import * as Location from "expo-location";
 import { doc, setDoc, collection, getDocs } from "firebase/firestore";
 import { db } from "../firebaseConfig";
@@ -19,11 +19,12 @@ const TournamentMapPage = () => {
   const [tournamentLocations, setTournamentLocations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
   const [newTournament, setNewTournament] = useState({
     title: "",
     description: "",
-    latitude: "",
-    longitude: "",
+    location: "",
   });
 
   useEffect(() => {
@@ -55,16 +56,26 @@ const TournamentMapPage = () => {
         ...doc.data(),
       }));
       setTournamentLocations(locations);
-      console.log("loaded places");
+      console.log("Loaded tournament locations");
     } catch (error) {
       console.error("Error fetching tournament locations:", error);
     }
   };
 
   const handleAddTournament = async () => {
+    if (
+      !newTournament.title ||
+      !newTournament.description ||
+      !newTournament.location
+    ) {
+      setErrorMessage("All fields are required");
+      setTimeout(() => setErrorMessage(""), 5000); // Clear success message after 5 seconds
+      return;
+    }
+
     try {
       const response = await axios.get(
-        `https://maps.googleapis.com/maps/api/geocode/json?address=${newTournament.location}&AIzaSyAikQ-XwdscIumcQZH4tj5lNLGl7aI3AZc`
+        `https://maps.googleapis.com/maps/api/geocode/json?address=${newTournament.location}&key=AIzaSyAikQ-XwdscIumcQZH4tj5lNLGl7aI3AZc`
       );
 
       const { results } = response.data;
@@ -77,6 +88,7 @@ const TournamentMapPage = () => {
           description: newTournament.description,
           latitude: lat,
           longitude: lng,
+          location: newTournament.location,
         };
 
         // Create a reference to a new document with the generated ID
@@ -84,20 +96,25 @@ const TournamentMapPage = () => {
 
         // Set the document data, merging with existing data if the document already exists
         await setDoc(locationRef, locationData, { merge: true });
-
-        console.log("Location added successfully");
-        setModalVisible(false);
+        console.log("added");
+        setSuccessMessage("Location added successfully");
+        setTimeout(() => {
+          setSuccessMessage("");
+          setModalVisible(false);
+        }, 2000);
+        console.log("done");
         fetchTournamentLocations();
         setNewTournament({
           title: "",
           description: "",
-          location: "", // Add Location property to newTournament state
+          location: "",
         });
       } else {
         console.error("Location not found");
       }
     } catch (error) {
       console.error("Error adding tournament location:", error);
+      setErrorMessage("Error adding tournament location");
     }
   };
 
@@ -137,14 +154,24 @@ const TournamentMapPage = () => {
                     latitude: loc.latitude,
                     longitude: loc.longitude,
                   }}
-                  title={loc.title}
-                  description={loc.description}
-                />
+                >
+                  <Callout>
+                    <View style={styles.callout}>
+                      <Text style={styles.title}>{loc.title}</Text>
+                      <Text style={styles.description}>{loc.description}</Text>
+                      <Text style={styles.location}>{loc.location}</Text>
+                    </View>
+                  </Callout>
+                </Marker>
               ))}
             </MapView>
             <Button
               title="Add Tournament Location"
-              onPress={() => setModalVisible(true)}
+              onPress={() => {
+                setModalVisible(true);
+                setSuccessMessage("");
+                setErrorMessage("");
+              }}
             />
             <Modal
               animationType="slide"
@@ -153,6 +180,9 @@ const TournamentMapPage = () => {
               onRequestClose={() => setModalVisible(false)}
             >
               <View style={styles.modalView}>
+                <Text style={styles.modalTextViewHeader}>
+                  Add your pool place:
+                </Text>
                 <TextInput
                   style={styles.input}
                   placeholder="Title"
@@ -173,7 +203,7 @@ const TournamentMapPage = () => {
                 />
                 <TextInput
                   style={styles.input}
-                  placeholder="Location"
+                  placeholder="Address"
                   placeholderTextColor="#333" // Darker placeholder color
                   value={newTournament.location}
                   onChangeText={(text) =>
@@ -182,6 +212,14 @@ const TournamentMapPage = () => {
                 />
                 <Button title="Add Location" onPress={handleAddTournament} />
                 <Button title="Cancel" onPress={() => setModalVisible(false)} />
+                {errorMessage && (
+                  <Text style={styles.errorMessage}>Error: {errorMessage}</Text>
+                )}
+                {successMessage && (
+                  <Text style={styles.successMessage}>
+                    Success: {successMessage}
+                  </Text>
+                )}
               </View>
             </Modal>
           </>
@@ -206,9 +244,12 @@ const styles = StyleSheet.create({
   },
   modalView: {
     margin: 20,
+    marginTop: 70,
     backgroundColor: "white",
     borderRadius: 20,
     padding: 35,
+    paddingBottom: 15,
+    paddingTop: 15,
     alignItems: "center",
     shadowColor: "#000",
     shadowOffset: {
@@ -219,6 +260,11 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 5,
   },
+  modalTextViewHeader: {
+    fontWeight: "bold",
+    fontSize: 24,
+    marginBottom: 15,
+  },
   input: {
     height: 40,
     borderColor: "gray",
@@ -226,6 +272,46 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     width: "100%",
     paddingLeft: 8,
+  },
+  callout: {
+    flexDirection: "column",
+    alignItems: "flex-start",
+  },
+  title: {
+    fontWeight: "bold",
+  },
+  location: {
+    color: "gray",
+  },
+  errorModalView: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    margin: 20,
+    backgroundColor: "white",
+    borderRadius: 20,
+    padding: 35,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  errorModalText: {
+    fontSize: 18,
+    color: "red",
+    marginBottom: 15,
+  },
+  errorMessage: {
+    color: "red",
+    marginTop: 10,
+  },
+  successMessage: {
+    color: "green",
+    marginTop: 10,
   },
 });
 
