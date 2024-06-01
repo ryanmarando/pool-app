@@ -12,8 +12,9 @@ import {
 import { useAuth } from "../AuthContext";
 import { getFirestore, doc, setDoc } from "firebase/firestore";
 import { db } from "../firebaseConfig";
-import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
+import { createUserWithEmailAndPassword } from "firebase/auth";
 import app from "../firebaseConfig"; // Import your firebaseConfig
+import { auth } from "../firebaseConfig";
 
 const SignUpPage = ({ navigation }) => {
   const [email, setEmail] = useState("");
@@ -23,7 +24,6 @@ const SignUpPage = ({ navigation }) => {
   const [lastName, setLastName] = useState("");
   const [error, setError] = useState("");
   const [visible, setVisible] = useState(false);
-  const auth = getAuth(app); // Initialize Firebase Auth
   const db = getFirestore(app); // Initialize Firestore
 
   const showDialog = () => setVisible(true);

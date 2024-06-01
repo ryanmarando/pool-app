@@ -2,12 +2,12 @@ import React, { useEffect, useState } from "react";
 import { View, Text, Button, StyleSheet } from "react-native";
 import { useAuth } from "../AuthContext";
 import { getFirestore, doc, getDoc } from "firebase/firestore";
-import app from "../firebaseConfig"; // Import your firebaseConfig
+import { auth } from "../firebaseConfig"; // Import your firebaseConfig
 
 const ProfileScreen = ({ navigation }) => {
   const { user, signOut } = useAuth();
   const [userData, setUserData] = useState(null);
-  const db = getFirestore(app); // Initialize Firestore
+  const db = getFirestore(auth.app); // Initialize Firestore
 
   useEffect(() => {
     if (!user) {
@@ -35,8 +35,14 @@ const ProfileScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      <Text>Hi, {userData.firstName}</Text>
-      <Text>Welcome, {userData.email}</Text>
+      {userData ? (
+        <>
+          <Text>Hi, {userData.firstName}</Text>
+          <Text>Welcome, {userData.email}</Text>
+        </>
+      ) : (
+        <Text>Loading user data...</Text>
+      )}
       <Button title="Sign Out" onPress={signOut} />
     </View>
   );
