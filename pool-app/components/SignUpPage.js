@@ -11,6 +11,8 @@ import {
 } from "react-native-paper";
 import { useAuth } from "../AuthContext";
 import { getFirestore, doc, setDoc } from "firebase/firestore";
+import { db } from "../firebaseConfig";
+import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
 import app from "../firebaseConfig"; // Import your firebaseConfig
 
 const SignUpPage = ({ navigation }) => {
@@ -21,7 +23,7 @@ const SignUpPage = ({ navigation }) => {
   const [lastName, setLastName] = useState("");
   const [error, setError] = useState("");
   const [visible, setVisible] = useState(false);
-  const { signUp } = useAuth();
+  const auth = getAuth(app); // Initialize Firebase Auth
   const db = getFirestore(app); // Initialize Firestore
 
   const showDialog = () => setVisible(true);
@@ -39,10 +41,36 @@ const SignUpPage = ({ navigation }) => {
       return;
     }
     try {
-      const userCredential = await signUp(email, password);
-      navigation.navigate("Profile");
+      console.log("Attempting to sign up...");
+      const userCredential = await createUserWithEmailAndPassword(
+        auth,
+        email,
+        password
+      );
+      console.log("User credential:", userCredential);
+      if (!userCredential || !userCredential.user) {
+        throw new Error("User registration failed: User not created");
+      }
+      const user = userCredential.user;
+
+      // Write user data to Firestore
+      await setDoc(doc(db, "users", user.uid), {
+        firstName,
+        lastName,
+        email,
+      })
+        .then(() => {
+          console.log("User data written to Firestore successfully");
+          navigation.navigate("Profile");
+        })
+        .catch((error) => {
+          console.error("Error writing user data to Firestore:", error);
+          setError("Error writing user data to Firestore");
+          showDialog();
+        });
     } catch (err) {
-      setError(err.message);
+      console.error("Error during sign up:", err);
+      setError("An error occurred during sign-up");
       showDialog();
     }
   };
