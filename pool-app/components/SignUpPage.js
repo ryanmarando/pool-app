@@ -9,9 +9,7 @@ import {
   Portal,
   Paragraph,
 } from "react-native-paper";
-import { useAuth } from "../AuthContext";
 import { getFirestore, doc, setDoc } from "firebase/firestore";
-import { db } from "../firebaseConfig";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import app from "../firebaseConfig"; // Import your firebaseConfig
 import { auth } from "../firebaseConfig";

@@ -13,18 +13,23 @@ import * as Location from "expo-location";
 import { doc, setDoc, collection, getDocs } from "firebase/firestore";
 import { db } from "../firebaseConfig";
 import axios from "axios";
+import { Linking } from "react-native";
 
 const TournamentMapPage = () => {
   const [location, setLocation] = useState(null);
   const [tournamentLocations, setTournamentLocations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
+  const [localtionModalVisible, setlocaltionModalVisible] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const [selectedLocation, setSelectedLocation] = useState(null);
+
   const [newTournament, setNewTournament] = useState({
     title: "",
     description: "",
     location: "",
+    time: "",
   });
 
   useEffect(() => {
@@ -37,7 +42,7 @@ const TournamentMapPage = () => {
 
       let location = await Location.getCurrentPositionAsync({});
       setLocation(location);
-      setLoading(false); // Set loading to false when location is obtained
+      setLoading(false);
     })();
   }, []);
 
@@ -45,6 +50,11 @@ const TournamentMapPage = () => {
     // Fetch tournament locations from Firestore when component mounts
     fetchTournamentLocations();
   }, []);
+
+  const handleMarkerPress = (location) => {
+    setSelectedLocation(location);
+    setlocaltionModalVisible(true);
+  };
 
   const fetchTournamentLocations = async () => {
     try {
@@ -89,6 +99,7 @@ const TournamentMapPage = () => {
           latitude: lat,
           longitude: lng,
           location: newTournament.location,
+          time: newTournament.time,
         };
 
         // Create a reference to a new document with the generated ID
@@ -108,6 +119,7 @@ const TournamentMapPage = () => {
           title: "",
           description: "",
           location: "",
+          time: "",
         });
       } else {
         console.error("Location not found");
@@ -116,6 +128,27 @@ const TournamentMapPage = () => {
       console.error("Error adding tournament location:", error);
       setErrorMessage("Error adding tournament location");
     }
+  };
+
+  const openMapsApp = (latitude, longitude) => {
+    const location = `${latitude},${longitude}`;
+    const appleMapsUrl = `http://maps.apple.com/?daddr=${location}&dirflg=d`;
+    const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${location}`;
+    const wazeUrl = `https://waze.com/ul?ll=${location}&navigate=yes`;
+
+    Linking.canOpenURL(appleMapsUrl).then((supported) => {
+      if (supported) {
+        Linking.openURL(appleMapsUrl);
+      } else {
+        Linking.canOpenURL(googleMapsUrl).then((supported) => {
+          if (supported) {
+            Linking.openURL(googleMapsUrl);
+          } else {
+            Linking.openURL(wazeUrl);
+          }
+        });
+      }
+    });
   };
 
   return (
@@ -139,14 +172,9 @@ const TournamentMapPage = () => {
                 latitudeDelta: 0.0922,
                 longitudeDelta: 0.0421,
               }}
+              showsUserLocation={true} // Display user's location
+              userLocationAnnotationTitle="Your Location"
             >
-              <Marker
-                coordinate={{
-                  latitude: location.coords.latitude,
-                  longitude: location.coords.longitude,
-                }}
-                title="Your Location"
-              />
               {tournamentLocations.map((loc) => (
                 <Marker
                   key={loc.id}
@@ -154,11 +182,13 @@ const TournamentMapPage = () => {
                     latitude: loc.latitude,
                     longitude: loc.longitude,
                   }}
+                  onPress={() => handleMarkerPress(loc)}
                 >
                   <Callout>
                     <View style={styles.callout}>
                       <Text style={styles.title}>{loc.title}</Text>
                       <Text style={styles.description}>{loc.description}</Text>
+                      <Text style={styles.location}>{loc.time}</Text>
                       <Text style={styles.location}>{loc.location}</Text>
                     </View>
                   </Callout>
@@ -203,6 +233,15 @@ const TournamentMapPage = () => {
                 />
                 <TextInput
                   style={styles.input}
+                  placeholder="Time"
+                  placeholderTextColor="#333" // Darker placeholder color
+                  value={newTournament.time}
+                  onChangeText={(text) =>
+                    setNewTournament({ ...newTournament, time: text })
+                  }
+                />
+                <TextInput
+                  style={styles.input}
                   placeholder="Address"
                   placeholderTextColor="#333" // Darker placeholder color
                   value={newTournament.location}
@@ -222,6 +261,53 @@ const TournamentMapPage = () => {
                 )}
               </View>
             </Modal>
+            {selectedLocation && (
+              <Modal
+                animationType="slide"
+                transparent={true}
+                visible={localtionModalVisible}
+                onRequestClose={() => {
+                  setlocaltionModalVisible(!localtionModalVisible);
+                }}
+              >
+                <View style={styles.modalView}>
+                  <View style={styles.modalContent}>
+                    <Text style={styles.modalTitle}>
+                      {selectedLocation.title}
+                    </Text>
+                    <Text style={styles.modalDescription}>
+                      {selectedLocation.description}
+                    </Text>
+                    <Text style={styles.modalDescription}>
+                      {selectedLocation.location}
+                    </Text>
+                    <Button
+                      title="Get directions"
+                      onPress={() =>
+                        openMapsApp(
+                          selectedLocation.latitude,
+                          selectedLocation.longitude
+                        )
+                      }
+                    ></Button>
+                    <Text style={styles.modalDescription}>
+                      {selectedLocation.time}
+                    </Text>
+                    <View>
+                      <Text>5 people are going.</Text>
+                      <Button title="Want to go?"></Button>
+                    </View>
+                    <Button
+                      title="Close"
+                      mode="contained"
+                      onPress={() =>
+                        setlocaltionModalVisible(!localtionModalVisible)
+                      }
+                    ></Button>
+                  </View>
+                </View>
+              </Modal>
+            )}
           </>
         )
       )}
@@ -259,6 +345,23 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 4,
     elevation: 5,
+  },
+  modalContent: {
+    width: 300,
+    padding: 10,
+    backgroundColor: "white",
+    borderRadius: 10,
+    alignItems: "center",
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    marginBottom: 10,
+  },
+  modalDescription: {
+    fontSize: 16,
+    marginBottom: 20,
+    textAlign: "center",
   },
   modalTextViewHeader: {
     fontWeight: "bold",
