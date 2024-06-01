@@ -40,12 +40,6 @@ const SignUpPage = ({ navigation }) => {
     }
     try {
       const userCredential = await signUp(email, password);
-      const user = userCredential.user;
-      await setDoc(doc(db, "users", user.uid), {
-        firstName,
-        lastName,
-        email,
-      });
       navigation.navigate("Profile");
     } catch (err) {
       setError(err.message);
