@@ -11,16 +11,12 @@ import {
   TextInput,
   ActivityIndicator,
 } from "react-native";
+import { Dialog, Portal, Paragraph } from "react-native-paper";
 import HeroImage from "../billiards-logo.png";
 import { useState, useEffect } from "react";
-import { doc, setDoc, collection, getDocs } from "firebase/firestore";
+import { doc, setDoc, collection, getDocs, getDoc } from "firebase/firestore";
 import { db } from "../firebaseConfig";
-
-const teamsData = [
-  { id: 1, name: "Team A", players: ["Player 1", "Player 2"] },
-  { id: 2, name: "Team B", players: ["Player 3", "Player 4"] },
-  // Add more teams as needed
-];
+import { getAuth } from "firebase/auth";
 
 const FindTeamsPage = () => {
   const [modalVisible, setModalVisible] = useState(false);
@@ -33,6 +29,12 @@ const FindTeamsPage = () => {
     skillLevel: "",
     availability: "",
   });
+  const auth = getAuth();
+  const user = auth.currentUser;
+  const [visible, setVisible] = useState(false);
+  const [error, setError] = useState("");
+  const showDialog = () => setVisible(true);
+  const hideDialog = () => setVisible(false);
 
   useEffect(() => {
     // Fetch tournament locations from Firestore when component mounts
@@ -53,7 +55,32 @@ const FindTeamsPage = () => {
     }
   };
 
-  const handleAddTournament = async () => {
+  const appendToUserDataBaseArray = async (newValue) => {
+    try {
+      // Fetch the current userTeamData from Firestore
+      const userRef = doc(db, "users", user.uid);
+      const userSnap = await getDoc(userRef);
+      const userTeamData = userSnap.data();
+
+      // Check if the `id` field exists and is an array
+      if (Array.isArray(userTeamData?.PoolTeamsId)) {
+        // Append the new value to the array
+        const updatedArray = [...userTeamData.PoolTeamsId, newValue];
+
+        // Update the Firestore document with the modified data
+        await setDoc(userRef, { PoolTeamsId: updatedArray }, { merge: true });
+        console.log("Array updated successfully.");
+      } else {
+        id = { PoolTeamsId: [newValue] };
+        await setDoc(doc(db, "users", user.uid), id, { merge: true });
+      }
+    } catch (error) {
+      console.error("Error appending to array:", error);
+      console.error("Error adding team post:", error);
+    }
+  };
+
+  const handleAddPoolTeams = async () => {
     if (!newTeam.name || !newTeam.skillLevel || !newTeam.availability) {
       setErrorMessage("All fields are required");
       setTimeout(() => setErrorMessage(""), 5000); // Clear success message after 5 seconds
@@ -69,11 +96,12 @@ const FindTeamsPage = () => {
         skillLevel: newTeam.skillLevel,
         availability: newTeam.availability,
       };
-
+      const userTeamData = { id: [id] };
       const teamRef = doc(db, "poolTeams", id.toString());
 
-      // Set the document data, merging with existing data if the document already exists
-      await setDoc(teamRef, teamData, { merge: true });
+      await setDoc(teamRef, teamData, { merge: true }); // add team data to database
+      await appendToUserDataBaseArray(teamData.id);
+      //await setDoc(doc(db, "users", user.uid), userTeamData, { merge: true }); // add that data post to the user to display on profile page
       console.log("added");
       setSuccessMessage("Post added successfully");
       setTimeout(() => {
@@ -92,6 +120,17 @@ const FindTeamsPage = () => {
       setErrorMessage("Error adding team post");
     } finally {
       setLoading(false); // Set loading to false after the request completes
+    }
+  };
+
+  const handlePostTeamButton = () => {
+    if (!user) {
+      setError("Please login to post your own team.");
+      showDialog();
+    } else {
+      setModalVisible(true);
+      setSuccessMessage("");
+      setErrorMessage("");
     }
   };
 
@@ -158,7 +197,7 @@ const FindTeamsPage = () => {
             <ActivityIndicator size="small" color="#007bff" /> // Show loading indicator when loading
           ) : (
             <>
-              <Button title="Add Your Team" onPress={handleAddTournament} />
+              <Button title="Add Your Team" onPress={handleAddPoolTeams} />
               <Button title="Cancel" onPress={() => setModalVisible(false)} />
             </>
           )}
@@ -171,16 +210,21 @@ const FindTeamsPage = () => {
         </View>
       </Modal>
       <View style={styles.buttonView}>
-        <Button
-          mode="contained"
-          title="Post Your Own Team"
-          onPress={() => {
-            setModalVisible(true);
-            setSuccessMessage("");
-            setErrorMessage("");
-          }}
-        />
+        <Button title="Post Your Own Team" onPress={handlePostTeamButton} />
       </View>
+      <Portal>
+        <Dialog visible={visible} onDismiss={hideDialog}>
+          <Dialog.Title>Error</Dialog.Title>
+          <Dialog.Content>
+            <Paragraph>{error}</Paragraph>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button title="OK" onPress={hideDialog}>
+              OK
+            </Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
     </View>
   );
 };
