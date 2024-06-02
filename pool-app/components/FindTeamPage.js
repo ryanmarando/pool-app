@@ -96,7 +96,6 @@ const FindTeamsPage = () => {
         skillLevel: newTeam.skillLevel,
         availability: newTeam.availability,
       };
-      const userTeamData = { id: [id] };
       const teamRef = doc(db, "poolTeams", id.toString());
 
       await setDoc(teamRef, teamData, { merge: true }); // add team data to database

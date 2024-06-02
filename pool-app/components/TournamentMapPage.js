@@ -7,13 +7,17 @@ import {
   Button,
   Modal,
   TextInput,
+  FlatList,
+  TouchableOpacity,
 } from "react-native";
 import MapView, { Marker, Callout } from "react-native-maps";
 import * as Location from "expo-location";
-import { doc, setDoc, collection, getDocs } from "firebase/firestore";
+import { doc, setDoc, collection, getDocs, getDoc } from "firebase/firestore";
 import { db } from "../firebaseConfig";
 import axios from "axios";
 import { Linking } from "react-native";
+import { getAuth } from "firebase/auth";
+import moment from "moment"; // Importing moment.js for date formatting
 
 const TournamentMapPage = () => {
   const [location, setLocation] = useState(null);
@@ -21,7 +25,7 @@ const TournamentMapPage = () => {
   const [loading, setLoading] = useState(true);
   const [locLoading, setLocLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
-  const [locationModalVisible, setlocationModalVisible] = useState(false);
+  const [tournamentListVisible, setTournamentListVisible] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [selectedLocation, setSelectedLocation] = useState(null);
@@ -32,6 +36,8 @@ const TournamentMapPage = () => {
     location: "",
     time: "",
   });
+  const auth = getAuth();
+  const user = auth.currentUser;
 
   useEffect(() => {
     (async () => {
@@ -73,6 +79,31 @@ const TournamentMapPage = () => {
     }
   };
 
+  const appendToUserDataBaseArray = async (newValue) => {
+    try {
+      // Fetch the current userTeamData from Firestore
+      const userRef = doc(db, "users", user.uid);
+      const userSnap = await getDoc(userRef);
+      const userTeamData = userSnap.data();
+
+      // Check if the `id` field exists and is an array
+      if (Array.isArray(userTeamData?.TournamentsId)) {
+        // Append the new value to the array
+        const updatedArray = [...userTeamData.TournamentsId, newValue];
+
+        // Update the Firestore document with the modified data
+        await setDoc(userRef, { TournamentsId: updatedArray }, { merge: true });
+        console.log("Array updated successfully.");
+      } else {
+        id = { TournamentsId: [newValue] };
+        await setDoc(doc(db, "users", user.uid), id, { merge: true });
+      }
+    } catch (error) {
+      console.error("Error appending to array:", error);
+      console.error("Error adding team post:", error);
+    }
+  };
+
   const handleAddTournament = async () => {
     if (
       !newTournament.title ||
@@ -102,6 +133,7 @@ const TournamentMapPage = () => {
           longitude: lng,
           location: newTournament.location,
           time: newTournament.time,
+          createdBy: user.displayName, // Store the creator's name
         };
 
         // Create a reference to a new document with the generated ID
@@ -109,6 +141,8 @@ const TournamentMapPage = () => {
 
         // Set the document data, merging with existing data if the document already exists
         await setDoc(locationRef, locationData, { merge: true });
+        await appendToUserDataBaseArray(locationData.id);
+
         setSuccessMessage("Location added successfully");
         setTimeout(() => {
           setSuccessMessage("");
@@ -123,10 +157,13 @@ const TournamentMapPage = () => {
         });
       } else {
         console.error("Location not found");
+        setErrorMessage("Location not found");
+        setTimeout(() => setErrorMessage(""), 5000);
       }
     } catch (error) {
       console.error("Error adding tournament location:", error);
       setErrorMessage("Error adding tournament location");
+      setTimeout(() => setErrorMessage(""), 5000);
     } finally {
       setLocLoading(false);
     }
@@ -151,6 +188,18 @@ const TournamentMapPage = () => {
         });
       }
     });
+  };
+
+  const renderTournamentItem = ({ item }) => {
+    const formattedTime = moment(item.time).format("ddd, MMM D [AT] h A");
+    return (
+      <View style={styles.tournamentItem}>
+        <Text style={styles.tournamentTime}>{formattedTime}</Text>
+        <Text style={styles.tournamentTitle}>{item.title}</Text>
+        <Text style={styles.tournamentDescription}>{item.description}</Text>
+        <Text style={styles.tournamentDescription}>At {item.location}</Text>
+      </View>
+    );
   };
 
   return (
@@ -210,11 +259,21 @@ const TournamentMapPage = () => {
                 setErrorMessage("");
               }}
             />
+            <View style={styles.buttonContainer}>
+              <Button
+                title="Show Tournaments"
+                onPress={() => {
+                  setTournamentListVisible(true);
+                }}
+              />
+            </View>
             <Modal
               animationType="slide"
               transparent={true}
               visible={modalVisible}
-              onRequestClose={() => setModalVisible(false)}
+              onRequestClose={() => {
+                setModalVisible(!modalVisible);
+              }}
             >
               <View style={styles.modalView}>
                 <Text style={styles.modalTextViewHeader}>
@@ -261,7 +320,7 @@ const TournamentMapPage = () => {
                 ) : (
                   <>
                     <Button
-                      title="Add Your Team"
+                      title="Add Your Tournament"
                       onPress={handleAddTournament}
                     />
                     <Button
@@ -327,6 +386,25 @@ const TournamentMapPage = () => {
                 </View>
               </Modal>
             )}
+            <Modal
+              animationType="slide"
+              transparent={true}
+              visible={tournamentListVisible}
+              onRequestClose={() => setTournamentListVisible(false)}
+            >
+              <View style={styles.modalView}>
+                <Text style={styles.modalTextViewHeader}>Tournament List</Text>
+                <FlatList
+                  data={tournamentLocations}
+                  renderItem={renderTournamentItem}
+                  keyExtractor={(item) => item.id.toString()}
+                />
+                <Button
+                  title="Close"
+                  onPress={() => setTournamentListVisible(false)}
+                />
+              </View>
+            </Modal>
           </>
         )
       )}
@@ -346,6 +424,14 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: 20,
+  },
+  buttonContainer: {
+    position: "absolute",
+    top: 50,
+    right: 10,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    width: 220,
   },
   modalView: {
     margin: 20,
@@ -404,6 +490,28 @@ const styles = StyleSheet.create({
   },
   location: {
     color: "gray",
+  },
+  tournamentItem: {
+    borderBottomWidth: 1,
+    borderBottomColor: "#ccc",
+    paddingVertical: 10,
+  },
+  tournamentTime: {
+    fontWeight: "bold",
+    color: "#333",
+  },
+  tournamentTitle: {
+    fontWeight: "bold",
+    fontSize: 16,
+  },
+  tournamentDescription: {
+    fontSize: 14,
+    marginTop: 5,
+    marginBottom: 5,
+  },
+  tournamentCreatedBy: {
+    fontStyle: "italic",
+    color: "#555",
   },
   errorModalView: {
     flex: 1,
