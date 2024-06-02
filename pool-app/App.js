@@ -21,7 +21,7 @@ const AppNavigator = () => {
   const { user } = useAuth();
 
   return (
-    <Stack.Navigator initialRouteName="Home">
+    <Stack.Navigator initialRouteName="FullMap">
       <Stack.Screen
         name="Home"
         component={HomeScreen}

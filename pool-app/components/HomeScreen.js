@@ -1,73 +1,18 @@
 import React, { useState, useEffect } from "react";
 import { ScrollView, StyleSheet, View, Text, Image, Modal } from "react-native";
-import {
-  Appbar,
-  Card,
-  Title,
-  Paragraph,
-  Button,
-  Provider as PaperProvider,
-} from "react-native-paper";
-import MapView, { Marker } from "react-native-maps";
-import { collection, getDocs } from "firebase/firestore";
-import * as Location from "expo-location";
-import { db } from "../firebaseConfig";
+import { Card, Title, Paragraph, Button } from "react-native-paper";
+import { useNavigation } from "@react-navigation/native";
+import HeroImage from "../billiards-logo.png";
 
 const HomeScreen = () => {
-  const [location, setLocation] = useState(null);
-  const [errorMsg, setErrorMsg] = useState(null);
-  const [modalVisible, setModalVisible] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [selectedLocation, setSelectedLocation] = useState(null);
-  const [tournamentLocations, setTournamentLocations] = useState([]);
-
-  useEffect(() => {
-    (async () => {
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") {
-        console.error("Permission to access location was denied");
-        return;
-      }
-
-      let location = await Location.getCurrentPositionAsync({});
-      setLocation(location);
-      setLoading(false); // Set loading to false when location is obtained
-    })();
-  }, []);
-
-  useEffect(() => {
-    // Fetch tournament locations from Firestore when component mounts
-    fetchTournamentLocations();
-  }, []);
-
-  const fetchTournamentLocations = async () => {
-    try {
-      const querySnapshot = await getDocs(
-        collection(db, "tournamentLocations")
-      );
-      const locations = querySnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-      setTournamentLocations(locations);
-      console.log("loaded places");
-    } catch (error) {
-      console.error("Error fetching tournament locations:", error);
-    }
-  };
-
-  const handleMarkerPress = (location) => {
-    setSelectedLocation(location);
-    setModalVisible(true);
-  };
-
+  const navigation = useNavigation();
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollView}>
         <View style={styles.heroSection}>
           <Image
             style={styles.heroImage}
-            source={{ uri: "https://example.com/hero-image.jpg" }} // Replace with a relevant billiards image URL
+            source={HeroImage} // Replace with a relevant billiards image URL
           />
           <Text style={styles.heroText}>
             Welcome to the Ultimate Billiards Pool Hub
@@ -77,48 +22,21 @@ const HomeScreen = () => {
           <Card style={styles.card}>
             <Card.Content>
               <Title style={styles.cardTitle}>Find Tournaments Near You</Title>
-              {location ? (
-                <MapView
-                  style={styles.map}
-                  region={{
-                    latitude: location.coords.latitude,
-                    longitude: location.coords.longitude,
-                    latitudeDelta: 0.0922,
-                    longitudeDelta: 0.0421,
-                  }}
+              <View>
+                <Button
+                  mode="contained"
+                  onPress={() => navigation.navigate("FullMap")}
                 >
-                  <Marker
-                    coordinate={{
-                      latitude: location.coords.latitude,
-                      longitude: location.coords.longitude,
-                    }}
-                    title="You are here"
-                  />
-                  {tournamentLocations.map((loc) => (
-                    <Marker
-                      key={loc.id}
-                      coordinate={{
-                        latitude: loc.latitude,
-                        longitude: loc.longitude,
-                      }}
-                      title={loc.title}
-                      description={loc.description}
-                      onPress={() => handleMarkerPress(loc)}
-                    />
-                  ))}
-                </MapView>
-              ) : (
-                <Paragraph style={styles.cardParagraph}>
-                  {errorMsg || "Loading your location..."}
-                </Paragraph>
-              )}
+                  See Map
+                </Button>
+              </View>
             </Card.Content>
           </Card>
           <Card style={styles.card}>
             <Card.Content>
-              <Title style={styles.cardTitle}>Latest Matches</Title>
+              <Title style={styles.cardTitle}>Find a Team</Title>
               <Paragraph style={styles.cardParagraph}>
-                Stay updated with the latest billiards matches around the globe.
+                See groups of people looking for an extra person!
               </Paragraph>
             </Card.Content>
             <Card.Cover
@@ -126,7 +44,12 @@ const HomeScreen = () => {
               source={{ uri: "https://example.com/matches-image.jpg" }}
             />
             <Card.Actions>
-              <Button mode="contained">View More</Button>
+              <Button
+                mode="contained"
+                onPress={() => navigation.navigate("FindTeam")}
+              >
+                View More
+              </Button>
             </Card.Actions>
           </Card>
 
@@ -165,31 +88,6 @@ const HomeScreen = () => {
           </Card>
         </View>
       </ScrollView>
-      {selectedLocation && (
-        <Modal
-          animationType="slide"
-          transparent={true}
-          visible={modalVisible}
-          onRequestClose={() => {
-            setModalVisible(!modalVisible);
-          }}
-        >
-          <View style={styles.modalView}>
-            <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>{selectedLocation.title}</Text>
-              <Text style={styles.modalDescription}>
-                {selectedLocation.description}
-              </Text>
-              <Button
-                mode="contained"
-                onPress={() => setModalVisible(!modalVisible)}
-              >
-                Close
-              </Button>
-            </View>
-          </View>
-        </Modal>
-      )}
     </View>
   );
 };
@@ -203,13 +101,16 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   heroSection: {
+    flexDirection: "row",
     alignItems: "center",
     marginBottom: 20,
+    marginTop: 25,
   },
   heroImage: {
-    width: "100%",
-    height: 25,
+    width: 50,
+    height: 50,
     borderRadius: 10,
+    marginRight: 10,
   },
   heroText: {
     marginTop: 11,

@@ -1,6 +1,7 @@
 // FindTeamsPage.js
 import React from "react";
 import { View, Text, FlatList, StyleSheet, Image } from "react-native";
+import HeroImage from "../billiards-logo.png";
 
 const teamsData = [
   { id: 1, name: "Team A", players: ["Player 1", "Player 2"] },
@@ -22,7 +23,7 @@ const FindTeamsPage = () => {
       <View style={styles.heroSection}>
         <Image
           style={styles.heroImage}
-          source={{ uri: "https://example.com/hero-image.jpg" }} // Replace with a relevant billiards image URL
+          source={HeroImage} // Replace with a relevant billiards image URL
         />
         <Text style={styles.heroText}>Find a team!</Text>
       </View>
@@ -61,13 +62,18 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
   heroSection: {
+    flexDirection: "row",
     alignItems: "center",
     marginBottom: 20,
+    marginTop: 40,
+    width: "100%",
+    justifyContent: "center",
   },
   heroImage: {
-    width: "100%",
-    height: 25,
+    width: 50,
+    height: 50,
     borderRadius: 10,
+    marginRight: 10,
   },
   heroText: {
     marginTop: 10,

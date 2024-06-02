@@ -24,7 +24,7 @@ const TournamentMapPage = () => {
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [selectedLocation, setSelectedLocation] = useState(null);
-
+  const [mapReady, setMapReady] = useState(false);
   const [newTournament, setNewTournament] = useState({
     title: "",
     description: "",
@@ -174,6 +174,11 @@ const TournamentMapPage = () => {
               }}
               showsUserLocation={true} // Display user's location
               userLocationAnnotationTitle="Your Location"
+              onMapReady={() => {
+                setTimeout(() => {
+                  setMapReady(true); // initially this state is false
+                }, 1000);
+              }}
             >
               {tournamentLocations.map((loc) => (
                 <Marker
