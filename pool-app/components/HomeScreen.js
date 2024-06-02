@@ -3,6 +3,8 @@ import { ScrollView, StyleSheet, View, Text, Image, Modal } from "react-native";
 import { Card, Title, Paragraph, Button } from "react-native-paper";
 import { useNavigation } from "@react-navigation/native";
 import HeroImage from "../billiards-logo.png";
+import FindTeamImage from "../pool-find-team-image.jpg";
+import FindTourneyNearYouImage from "../find-tourney-near-you.jpg";
 
 const HomeScreen = () => {
   const navigation = useNavigation();
@@ -22,15 +24,22 @@ const HomeScreen = () => {
           <Card style={styles.card}>
             <Card.Content>
               <Title style={styles.cardTitle}>Find Tournaments Near You</Title>
-              <View>
-                <Button
-                  mode="contained"
-                  onPress={() => navigation.navigate("FullMap")}
-                >
-                  See Map
-                </Button>
-              </View>
+              <Paragraph style={styles.cardParagraph}>
+                Browse the map of pool places!
+              </Paragraph>
             </Card.Content>
+            <Card.Cover
+              style={styles.cardCover}
+              source={FindTourneyNearYouImage}
+            />
+            <Card.Actions>
+              <Button
+                mode="contained"
+                onPress={() => navigation.navigate("FullMap")}
+              >
+                View Map
+              </Button>
+            </Card.Actions>
           </Card>
           <Card style={styles.card}>
             <Card.Content>
@@ -39,10 +48,7 @@ const HomeScreen = () => {
                 See groups of people looking for an extra person!
               </Paragraph>
             </Card.Content>
-            <Card.Cover
-              style={styles.cardCover}
-              source={{ uri: "https://example.com/matches-image.jpg" }}
-            />
+            <Card.Cover style={styles.cardCover} source={FindTeamImage} />
             <Card.Actions>
               <Button
                 mode="contained"

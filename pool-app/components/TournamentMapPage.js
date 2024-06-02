@@ -19,8 +19,9 @@ const TournamentMapPage = () => {
   const [location, setLocation] = useState(null);
   const [tournamentLocations, setTournamentLocations] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [locLoading, setLocLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
-  const [localtionModalVisible, setlocaltionModalVisible] = useState(false);
+  const [locationModalVisible, setlocationModalVisible] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [selectedLocation, setSelectedLocation] = useState(null);
@@ -53,7 +54,7 @@ const TournamentMapPage = () => {
 
   const handleMarkerPress = (location) => {
     setSelectedLocation(location);
-    setlocaltionModalVisible(true);
+    setlocationModalVisible(true);
   };
 
   const fetchTournamentLocations = async () => {
@@ -76,13 +77,14 @@ const TournamentMapPage = () => {
     if (
       !newTournament.title ||
       !newTournament.description ||
-      !newTournament.location
+      !newTournament.location ||
+      !newTournament.time
     ) {
       setErrorMessage("All fields are required");
       setTimeout(() => setErrorMessage(""), 5000); // Clear success message after 5 seconds
       return;
     }
-
+    setLocLoading(true);
     try {
       const response = await axios.get(
         `https://maps.googleapis.com/maps/api/geocode/json?address=${newTournament.location}&key=AIzaSyAikQ-XwdscIumcQZH4tj5lNLGl7aI3AZc`
@@ -107,13 +109,11 @@ const TournamentMapPage = () => {
 
         // Set the document data, merging with existing data if the document already exists
         await setDoc(locationRef, locationData, { merge: true });
-        console.log("added");
         setSuccessMessage("Location added successfully");
         setTimeout(() => {
           setSuccessMessage("");
           setModalVisible(false);
         }, 2000);
-        console.log("done");
         fetchTournamentLocations();
         setNewTournament({
           title: "",
@@ -127,6 +127,8 @@ const TournamentMapPage = () => {
     } catch (error) {
       console.error("Error adding tournament location:", error);
       setErrorMessage("Error adding tournament location");
+    } finally {
+      setLocLoading(false);
     }
   };
 
@@ -254,8 +256,20 @@ const TournamentMapPage = () => {
                     setNewTournament({ ...newTournament, location: text })
                   }
                 />
-                <Button title="Add Location" onPress={handleAddTournament} />
-                <Button title="Cancel" onPress={() => setModalVisible(false)} />
+                {locLoading ? (
+                  <ActivityIndicator size="small" color="#007bff" /> // Show loading indicator when loading
+                ) : (
+                  <>
+                    <Button
+                      title="Add Your Team"
+                      onPress={handleAddTournament}
+                    />
+                    <Button
+                      title="Cancel"
+                      onPress={() => setModalVisible(false)}
+                    />
+                  </>
+                )}
                 {errorMessage && (
                   <Text style={styles.errorMessage}>Error: {errorMessage}</Text>
                 )}
@@ -270,9 +284,9 @@ const TournamentMapPage = () => {
               <Modal
                 animationType="slide"
                 transparent={true}
-                visible={localtionModalVisible}
+                visible={locationModalVisible}
                 onRequestClose={() => {
-                  setlocaltionModalVisible(!localtionModalVisible);
+                  setlocationModalVisible(!locationModalVisible);
                 }}
               >
                 <View style={styles.modalView}>
@@ -306,7 +320,7 @@ const TournamentMapPage = () => {
                       title="Close"
                       mode="contained"
                       onPress={() =>
-                        setlocaltionModalVisible(!localtionModalVisible)
+                        setlocationModalVisible(!locationModalVisible)
                       }
                     ></Button>
                   </View>
