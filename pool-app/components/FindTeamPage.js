@@ -17,6 +17,7 @@ import { useState, useEffect } from "react";
 import { doc, setDoc, collection, getDocs, getDoc } from "firebase/firestore";
 import { db } from "../firebaseConfig";
 import { getAuth } from "firebase/auth";
+import { useNavigation } from "@react-navigation/native";
 
 const FindTeamsPage = () => {
   const [modalVisible, setModalVisible] = useState(false);
@@ -24,6 +25,7 @@ const FindTeamsPage = () => {
   const [successMessage, setSuccessMessage] = useState("");
   const [poolTeams, setPoolTeams] = useState([]);
   const [loading, setLoading] = useState(false);
+
   const [newTeam, setNewTeam] = useState({
     name: "",
     skillLevel: "",
@@ -35,6 +37,7 @@ const FindTeamsPage = () => {
   const [error, setError] = useState("");
   const showDialog = () => setVisible(true);
   const hideDialog = () => setVisible(false);
+  const navigation = useNavigation();
 
   useEffect(() => {
     // Fetch tournament locations from Firestore when component mounts
@@ -226,6 +229,14 @@ const FindTeamsPage = () => {
             <Button title="OK" onPress={hideDialog}>
               OK
             </Button>
+            <Button
+              title="Sign In"
+              mode="contained"
+              onPress={() => {
+                hideDialog();
+                navigation.navigate("Profile");
+              }}
+            ></Button>
           </Dialog.Actions>
         </Dialog>
       </Portal>

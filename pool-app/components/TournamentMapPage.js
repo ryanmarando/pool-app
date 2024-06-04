@@ -21,12 +21,14 @@ import {
   updateDoc,
   arrayRemove,
 } from "firebase/firestore";
+import { Dialog, Portal, Paragraph } from "react-native-paper";
 import { db } from "../firebaseConfig";
 import axios from "axios";
 import { Linking } from "react-native";
 import { getAuth } from "firebase/auth";
 import { useFocusEffect } from "@react-navigation/native";
 import Icon from "react-native-vector-icons/FontAwesome";
+import { useNavigation } from "@react-navigation/native";
 
 const TournamentMapPage = () => {
   const [location, setLocation] = useState(null);
@@ -44,6 +46,10 @@ const TournamentMapPage = () => {
   const [isFavorite, setIsFavorite] = useState(false);
   const [filteredTournaments, setFilteredTournaments] = useState([]);
   const [isFiltered, setIsFiltered] = useState(false);
+  const [visible, setVisible] = useState(false);
+  const [error, setError] = useState("");
+  const showDialog = () => setVisible(true);
+  const hideDialog = () => setVisible(false);
   const [newTournament, setNewTournament] = useState({
     title: "",
     description: "",
@@ -53,6 +59,7 @@ const TournamentMapPage = () => {
   const auth = getAuth();
   const user = auth.currentUser;
   const mapRef = useRef(null);
+  const navigation = useNavigation();
 
   useEffect(() => {
     (async () => {
@@ -327,17 +334,17 @@ const TournamentMapPage = () => {
   const renderTournamentItem = ({ item }) => {
     return (
       <View style={styles.tournamentItem}>
-        <View>
+        <View style={styles.tournamentInfo}>
           <Text style={styles.tournamentTime}>{item.time}</Text>
           <Text style={styles.tournamentTitle}>{item.title}</Text>
           <Text style={styles.tournamentDescription}>{item.description}</Text>
-          <Text style={styles.tournamentDescription}>At {item.location}</Text>
+          <Text style={styles.tournamentLocation}>At {item.location}</Text>
         </View>
         <View style={styles.directionButtonContainer}>
           <Button
             title="Get directions"
             onPress={() => openMapsApp(item.latitude, item.longitude)}
-          ></Button>
+          />
         </View>
       </View>
     );
@@ -418,6 +425,11 @@ const TournamentMapPage = () => {
             <Button
               title="Add Tournament Location"
               onPress={() => {
+                if (!user) {
+                  setError("Please login to post your own tournament.");
+                  showDialog();
+                  return;
+                }
                 setModalVisible(true);
                 setSuccessMessage("");
                 setErrorMessage("");
@@ -612,6 +624,27 @@ const TournamentMapPage = () => {
                 />
               </View>
             </Modal>
+            <Portal>
+              <Dialog visible={visible} onDismiss={hideDialog}>
+                <Dialog.Title>Error</Dialog.Title>
+                <Dialog.Content>
+                  <Paragraph>{error}</Paragraph>
+                </Dialog.Content>
+                <Dialog.Actions>
+                  <Button title="Close" onPress={hideDialog}>
+                    OK
+                  </Button>
+                  <Button
+                    title="Sign In"
+                    mode="contained"
+                    onPress={() => {
+                      hideDialog();
+                      navigation.navigate("Profile");
+                    }}
+                  ></Button>
+                </Dialog.Actions>
+              </Dialog>
+            </Portal>
           </>
         )
       )}
@@ -725,15 +758,21 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     width: "100%",
   },
+  tournamentInfo: {
+    flex: 1,
+    paddingRight: 10,
+  },
   directionButtonContainer: {
     flex: 1,
-    alignItems: "flex-end", // Align children to the right
+    alignItems: "flex-end",
     justifyContent: "center",
+    flexShrink: 0,
   },
   tournamentTime: {
     fontWeight: "bold",
     color: "#333",
   },
+
   tournamentTitle: {
     fontWeight: "bold",
     fontSize: 16,

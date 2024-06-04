@@ -355,12 +355,12 @@ const ProfileScreen = ({ navigation }) => {
       data: favoriteTournaments,
     },
     {
-      title: "Your Team Posts",
-      data: poolTeams,
-    },
-    {
       title: "Your Events/Tournaments",
       data: postedTournaments,
+    },
+    {
+      title: "Your Team Posts",
+      data: poolTeams,
     },
   ];
 
