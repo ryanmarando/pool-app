@@ -5,6 +5,7 @@ import { useNavigation } from "@react-navigation/native";
 import HeroImage from "../billiards-logo.png";
 import FindTeamImage from "../pool-find-team-image.jpg";
 import FindTourneyNearYouImage from "../find-tourney-near-you.jpg";
+import PostTourneyNearYouImage from "../post-tourney-image.jpg";
 
 const HomeScreen = () => {
   const navigation = useNavigation();
@@ -61,35 +62,22 @@ const HomeScreen = () => {
 
           <Card style={styles.card}>
             <Card.Content>
-              <Title style={styles.cardTitle}>Tips & Tricks</Title>
+              <Title style={styles.cardTitle}>Create Your Own Tournament</Title>
               <Paragraph style={styles.cardParagraph}>
-                Improve your game with expert tips and tricks from
-                professionals.
+                Create your own tournament for pool players to see.
               </Paragraph>
             </Card.Content>
             <Card.Cover
               style={styles.cardCover}
-              source={{ uri: "https://example.com/tips-image.jpg" }}
+              source={PostTourneyNearYouImage}
             />
             <Card.Actions>
-              <Button mode="contained">Learn More</Button>
-            </Card.Actions>
-          </Card>
-
-          <Card style={styles.card}>
-            <Card.Content>
-              <Title style={styles.cardTitle}>Upcoming Tournaments</Title>
-              <Paragraph style={styles.cardParagraph}>
-                Don't miss out on the upcoming billiards tournaments. Get the
-                schedule here.
-              </Paragraph>
-            </Card.Content>
-            <Card.Cover
-              style={styles.cardCover}
-              source={{ uri: "https://example.com/tournaments-image.jpg" }}
-            />
-            <Card.Actions>
-              <Button mode="contained">Check Schedule</Button>
+              <Button
+                mode="contained"
+                onPress={() => navigation.navigate("FullMap")}
+              >
+                Create
+              </Button>
             </Card.Actions>
           </Card>
         </View>
