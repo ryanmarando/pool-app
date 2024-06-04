@@ -110,8 +110,10 @@ const styles = StyleSheet.create({
     marginTop: 11,
     fontSize: 24,
     fontWeight: "bold",
-    textAlign: "center",
+    textAlign: "right",
     color: "white", // Adjust text color for better contrast
+    maxWidth: "90%",
+    marginLeft: 10,
   },
   contentSection: {
     flex: 1,

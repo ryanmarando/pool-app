@@ -42,6 +42,8 @@ const TournamentMapPage = () => {
   const [mapReady, setMapReady] = useState(false);
   const [countGoingButton, setCountGoingButton] = useState(false);
   const [isFavorite, setIsFavorite] = useState(false);
+  const [filteredTournaments, setFilteredTournaments] = useState([]);
+  const [isFiltered, setIsFiltered] = useState(false);
   const [newTournament, setNewTournament] = useState({
     title: "",
     description: "",
@@ -275,6 +277,51 @@ const TournamentMapPage = () => {
         });
       }
     });
+  };
+
+  const haversineDistance = (coords1, coords2) => {
+    const toRad = (x) => (x * Math.PI) / 180;
+    const R = 6371; // Earth's radius in km
+
+    const dLat = toRad(coords2.latitude - coords1.latitude);
+    const dLon = toRad(coords2.longitude - coords1.longitude);
+
+    const lat1 = toRad(coords1.latitude);
+    const lat2 = toRad(coords2.latitude);
+
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.sin(dLon / 2) * Math.sin(dLon / 2) * Math.cos(lat1) * Math.cos(lat2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  };
+
+  const filterTournamentsByDistance = (
+    tournaments,
+    userLocation,
+    maxDistance
+  ) => {
+    const filteredTournaments = tournaments.filter((tournament) => {
+      const tournamentLocation = {
+        latitude: tournament.latitude,
+        longitude: tournament.longitude,
+      };
+      const distance = haversineDistance(userLocation, tournamentLocation);
+      return distance <= maxDistance;
+    });
+    return filteredTournaments;
+  };
+
+  const handleFilterTournamentsByDistance = () => {
+    if (location) {
+      const filtered = filterTournamentsByDistance(
+        tournamentLocations,
+        location.coords,
+        50 // Filter within 50 km
+      );
+      setFilteredTournaments(filtered);
+      setIsFiltered(!isFiltered);
+    }
   };
 
   const renderTournamentItem = ({ item }) => {
@@ -538,10 +585,24 @@ const TournamentMapPage = () => {
               onRequestClose={() => setTournamentListVisible(false)}
             >
               <View style={styles.modalView}>
+                {isFiltered ? (
+                  // Show loading indicator when loading
+                  <Button
+                    title="Unfilter"
+                    onPress={handleFilterTournamentsByDistance}
+                  ></Button>
+                ) : (
+                  <View>
+                    <Button
+                      title="Filter within 50 miles"
+                      onPress={handleFilterTournamentsByDistance}
+                    />
+                  </View>
+                )}
                 <Text style={styles.modalTextViewHeader}>Tournament List</Text>
                 <FlatList
                   style={styles.flatListView}
-                  data={tournamentLocations}
+                  data={isFiltered ? filteredTournaments : tournamentLocations}
                   renderItem={renderTournamentItem}
                   keyExtractor={(item) => item.id.toString()}
                 />
