@@ -12,7 +12,15 @@ import {
 } from "react-native";
 import MapView, { Marker, Callout } from "react-native-maps";
 import * as Location from "expo-location";
-import { doc, setDoc, collection, getDocs, getDoc } from "firebase/firestore";
+import {
+  doc,
+  setDoc,
+  collection,
+  getDocs,
+  getDoc,
+  updateDoc,
+  arrayRemove,
+} from "firebase/firestore";
 import { db } from "../firebaseConfig";
 import axios from "axios";
 import { Linking } from "react-native";
@@ -34,7 +42,6 @@ const TournamentMapPage = () => {
   const [mapReady, setMapReady] = useState(false);
   const [countGoingButton, setCountGoingButton] = useState(false);
   const [isFavorite, setIsFavorite] = useState(false);
-  const [visibleMarkers, setVisibleMarkers] = useState([]);
   const [newTournament, setNewTournament] = useState({
     title: "",
     description: "",
@@ -44,10 +51,6 @@ const TournamentMapPage = () => {
   const auth = getAuth();
   const user = auth.currentUser;
   const mapRef = useRef(null);
-
-  const toggleFavorite = () => {
-    setIsFavorite(!isFavorite);
-  };
 
   useEffect(() => {
     (async () => {
@@ -70,9 +73,28 @@ const TournamentMapPage = () => {
     }, [])
   );
 
-  const handleMarkerPress = (location) => {
+  const handleMarkerPress = async (location) => {
+    if (!user) {
+      setCountGoingButton(false);
+      setSelectedLocation(location);
+      setlocationModalVisible(true);
+      setIsFavorite(false);
+      return;
+    }
     setCountGoingButton(false);
     setSelectedLocation(location);
+    const userRef = doc(db, "users", user.uid);
+    const userSnap = await getDoc(userRef);
+    const userTeamData = userSnap.data();
+    if (
+      user &&
+      userTeamData.FavoriteTournamentsId &&
+      userTeamData.FavoriteTournamentsId.includes(location.id)
+    ) {
+      setIsFavorite(true);
+    } else {
+      setIsFavorite(false);
+    }
     setlocationModalVisible(true);
   };
 
@@ -114,6 +136,58 @@ const TournamentMapPage = () => {
     } catch (error) {
       console.error("Error appending to array:", error);
       console.error("Error adding team post:", error);
+    }
+  };
+
+  const toggleFavorite = async () => {
+    setIsFavorite(!isFavorite);
+    if (!isFavorite) {
+      try {
+        // Fetch the current userTeamData from Firestore
+        const userRef = doc(db, "users", user.uid);
+        const userSnap = await getDoc(userRef);
+        const userTeamData = userSnap.data();
+
+        // Check if the `id` field exists and is an array
+        if (Array.isArray(userTeamData?.FavoriteTournamentsId)) {
+          console.log("updating exisiting");
+          // Append the new value to the array
+          const updatedArray = [
+            ...userTeamData.FavoriteTournamentsId,
+            selectedLocation.id,
+          ];
+
+          // Update the Firestore document with the modified data
+          await setDoc(
+            userRef,
+            { FavoriteTournamentsId: updatedArray },
+            { merge: true }
+          );
+          console.log("Array updated successfully.");
+        } else {
+          console.log("new field");
+          id = { FavoriteTournamentsId: [selectedLocation.id] };
+          await setDoc(doc(db, "users", user.uid), id, { merge: true });
+        }
+        console.log("Favorited ", selectedLocation.id);
+      } catch {
+        console.error("Error favoriting");
+      }
+    } else {
+      try {
+        const userRef = doc(db, "users", user.uid);
+        // Only call arrayRemove if id is not null or undefined
+        await updateDoc(userRef, {
+          FavoriteTournamentsId: arrayRemove(selectedLocation.id),
+        });
+
+        console.log(`Deleted favorite with ID: ${selectedLocation.id}`);
+      } catch (error) {
+        console.error(
+          `Error deleting team with ID: ${selectedLocation.id}`,
+          error
+        );
+      }
     }
   };
 
@@ -182,25 +256,6 @@ const TournamentMapPage = () => {
     }
   };
 
-  const handleRegionChangeComplete = (region) => {
-    const { latitude, longitude, latitudeDelta, longitudeDelta } = region;
-    const minLat = latitude - latitudeDelta / 2;
-    const maxLat = latitude + latitudeDelta / 2;
-    const minLng = longitude - longitudeDelta / 2;
-    const maxLng = longitude + longitudeDelta / 2;
-
-    const markersInView = tournamentLocations.filter((loc) => {
-      return (
-        loc.latitude >= minLat &&
-        loc.latitude <= maxLat &&
-        loc.longitude >= minLng &&
-        loc.longitude <= maxLng
-      );
-    });
-
-    setVisibleMarkers(markersInView);
-  };
-
   const openMapsApp = (latitude, longitude) => {
     const location = `${latitude},${longitude}`;
     const appleMapsUrl = `http://maps.apple.com/?daddr=${location}&dirflg=d`;
@@ -225,10 +280,18 @@ const TournamentMapPage = () => {
   const renderTournamentItem = ({ item }) => {
     return (
       <View style={styles.tournamentItem}>
-        <Text style={styles.tournamentTime}>{item.time}</Text>
-        <Text style={styles.tournamentTitle}>{item.title}</Text>
-        <Text style={styles.tournamentDescription}>{item.description}</Text>
-        <Text style={styles.tournamentDescription}>At {item.location}</Text>
+        <View>
+          <Text style={styles.tournamentTime}>{item.time}</Text>
+          <Text style={styles.tournamentTitle}>{item.title}</Text>
+          <Text style={styles.tournamentDescription}>{item.description}</Text>
+          <Text style={styles.tournamentDescription}>At {item.location}</Text>
+        </View>
+        <View style={styles.directionButtonContainer}>
+          <Button
+            title="Get directions"
+            onPress={() => openMapsApp(item.latitude, item.longitude)}
+          ></Button>
+        </View>
       </View>
     );
   };
@@ -288,7 +351,6 @@ const TournamentMapPage = () => {
                   setMapReady(true); // initially this state is false
                 }, 1000);
               }}
-              onRegionChangeComplete={handleRegionChangeComplete}
             >
               {tournamentLocations.map((loc) => (
                 <Marker
@@ -400,6 +462,7 @@ const TournamentMapPage = () => {
                 transparent={true}
                 visible={locationModalVisible}
                 onRequestClose={() => {
+                  setSelectedLocation(null);
                   setlocationModalVisible(!locationModalVisible);
                 }}
               >
@@ -477,6 +540,7 @@ const TournamentMapPage = () => {
               <View style={styles.modalView}>
                 <Text style={styles.modalTextViewHeader}>Tournament List</Text>
                 <FlatList
+                  style={styles.flatListView}
                   data={tournamentLocations}
                   renderItem={renderTournamentItem}
                   keyExtractor={(item) => item.id.toString()}
@@ -532,6 +596,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 4,
     elevation: 5,
+    maxHeight: 600,
   },
   modalContent: {
     width: 300,
@@ -587,10 +652,22 @@ const styles = StyleSheet.create({
   location: {
     color: "gray",
   },
+  flatListView: {
+    width: "100%",
+  },
   tournamentItem: {
+    flex: 1,
+    flexDirection: "row",
+    backgroundColor: "white",
     borderBottomWidth: 1,
     borderBottomColor: "#ccc",
     paddingVertical: 10,
+    width: "100%",
+  },
+  directionButtonContainer: {
+    flex: 1,
+    alignItems: "flex-end", // Align children to the right
+    justifyContent: "center",
   },
   tournamentTime: {
     fontWeight: "bold",

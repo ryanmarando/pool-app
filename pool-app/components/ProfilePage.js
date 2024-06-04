@@ -6,6 +6,7 @@ import {
   StyleSheet,
   SectionList,
   ActivityIndicator,
+  TouchableOpacity,
 } from "react-native";
 import { useAuth } from "../AuthContext";
 import {
@@ -16,6 +17,7 @@ import {
   arrayRemove,
 } from "firebase/firestore";
 import { db } from "../firebaseConfig";
+import Icon from "react-native-vector-icons/FontAwesome";
 
 const ProfileScreen = ({ navigation }) => {
   const { user, signOut } = useAuth();
@@ -24,6 +26,7 @@ const ProfileScreen = ({ navigation }) => {
   const [postedTournaments, setPostedTournaments] = useState([]);
   const [favoriteTournaments, setFavoriteTournaments] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isFavorite, setIsFavorite] = useState(true);
 
   const fetchUserData = async () => {
     setIsLoading(true);
@@ -33,6 +36,14 @@ const ProfileScreen = ({ navigation }) => {
       if (userDoc.exists()) {
         const data = userDoc.data();
         setUserData(data);
+        if (
+          data.FavoriteTournamentsId &&
+          Array.isArray(data.FavoriteTournamentsId)
+        ) {
+          fetchFavoriteTournaments(data.FavoriteTournamentsId);
+        } else {
+          console.log("FavoriteTournamentsId is not an array or is undefined.");
+        }
         if (data.PoolTeamsId && Array.isArray(data.PoolTeamsId)) {
           fetchPoolTeams(data.PoolTeamsId);
         } else {
@@ -132,6 +143,49 @@ const ProfileScreen = ({ navigation }) => {
     }
   };
 
+  const fetchFavoriteTournaments = async (tournamentIds) => {
+    console.log("Fetching favorite tournament IDs:", tournamentIds);
+    try {
+      const tournaments = await Promise.all(
+        tournamentIds.map(async (id) => {
+          if (id) {
+            const idStr = String(id); // Ensure the ID is a string
+            try {
+              console.log(`Fetching team document for ID: ${idStr}`);
+              const tournamentDoc = await getDoc(
+                doc(db, "tournamentLocations", idStr)
+              );
+              if (tournamentDoc.exists()) {
+                return tournamentDoc.data();
+              } else {
+                console.log(`No team document found for ID: ${idStr}`);
+                return null;
+              }
+            } catch (error) {
+              console.error(
+                `Error fetching team document for ID: ${idStr}`,
+                error
+              );
+              return null;
+            }
+          } else {
+            console.log(
+              "Encountered an undefined or invalid favtournamentId:",
+              id
+            );
+            return null;
+          }
+        })
+      );
+      setFavoriteTournaments(
+        tournaments.filter((tournament) => tournament !== null)
+      );
+      setIsLoading(false);
+    } catch (error) {
+      console.error("Error fetching posted tournaments:", error);
+    }
+  };
+
   useEffect(() => {
     if (!user) {
       navigation.navigate("SignIn");
@@ -190,6 +244,23 @@ const ProfileScreen = ({ navigation }) => {
     }
   };
 
+  const toggleFavorite = async (id) => {
+    try {
+      setFavoriteTournaments((prevTournaments) =>
+        prevTournaments.filter((tournament) => tournament.id !== id)
+      );
+      const userRef = doc(db, "users", user.uid);
+      // Only call arrayRemove if id is not null or undefined
+      await updateDoc(userRef, {
+        FavoriteTournamentsId: arrayRemove(id),
+      });
+
+      console.log(`Deleted favorite with ID: ${id}`);
+    } catch (error) {
+      console.error(`Error deleting team with ID: ${id}`, error);
+    }
+  };
+
   const renderTeamItem = ({ item }) => (
     <View style={styles.teamItem}>
       {item ? (
@@ -241,6 +312,35 @@ const ProfileScreen = ({ navigation }) => {
     </View>
   );
 
+  const renderFavoriteTournamentItem = ({ item }) => (
+    <View style={styles.teamItem}>
+      {item ? (
+        <>
+          <View style={styles.teamInfo}>
+            <Text style={styles.teamName}>{item.title}</Text>
+            <Text>Description: {item.description}</Text>
+            <Text>{item.time}</Text>
+            <Text>{item.location}</Text>
+          </View>
+          <View style={styles.deleteButtonContainer}>
+            <TouchableOpacity
+              style={styles.favoriteIcon}
+              onPress={() => toggleFavorite(item.id)}
+            >
+              <Icon
+                name={isFavorite ? "star" : "star-o"}
+                size={30}
+                color={isFavorite ? "#FFD700" : "#000"}
+              />
+            </TouchableOpacity>
+          </View>
+        </>
+      ) : (
+        <ActivityIndicator color="#007bff" size="small" />
+      )}
+    </View>
+  );
+
   if (!user) {
     return null; // Render nothing if the user is not authenticated
   }
@@ -276,7 +376,7 @@ const ProfileScreen = ({ navigation }) => {
           ) : (
             <Text>Loading user data...</Text>
           )}
-          <Button title="Sign Out" onPress={signOut} />
+          <Button title="Sign Out" onPress={signOut} color={"yellow"} />
         </View>
       );
     } else if (section.title === "Your Team Posts") {
@@ -319,6 +419,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     paddingTop: 60,
+    backgroundColor: "#00a9ff",
   },
   sectionListContent: {
     paddingBottom: 20,
