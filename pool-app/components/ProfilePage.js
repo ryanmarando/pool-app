@@ -4,7 +4,7 @@ import {
   Text,
   Button,
   StyleSheet,
-  FlatList,
+  SectionList,
   ActivityIndicator,
 } from "react-native";
 import { useAuth } from "../AuthContext";
@@ -22,6 +22,7 @@ const ProfileScreen = ({ navigation }) => {
   const [userData, setUserData] = useState(null);
   const [poolTeams, setPoolTeams] = useState([]);
   const [postedTournaments, setPostedTournaments] = useState([]);
+  const [favoriteTournaments, setFavoriteTournaments] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
 
   const fetchUserData = async () => {
@@ -207,7 +208,11 @@ const ProfileScreen = ({ navigation }) => {
           </View>
         </>
       ) : (
-        <ActivityIndicator color="#007bff" size="small" />
+        <ActivityIndicator
+          color="#007bff"
+          size="small"
+          style={styles.loadingBar}
+        />
       )}
     </View>
   );
@@ -240,41 +245,72 @@ const ProfileScreen = ({ navigation }) => {
     return null; // Render nothing if the user is not authenticated
   }
 
+  const sections = [
+    {
+      title: "User Data",
+      data: [{ type: "userData" }],
+    },
+    {
+      title: "Favorite Tournaments",
+      data: favoriteTournaments,
+    },
+    {
+      title: "Your Team Posts",
+      data: poolTeams,
+    },
+    {
+      title: "Your Events/Tournaments",
+      data: postedTournaments,
+    },
+  ];
+
+  const renderItem = ({ item, section }) => {
+    if (section.title === "User Data") {
+      return (
+        <View style={styles.userData}>
+          {userData ? (
+            <>
+              <Text>Hi, {userData.firstName}</Text>
+              <Text>Welcome, {userData.email}</Text>
+            </>
+          ) : (
+            <Text>Loading user data...</Text>
+          )}
+          <Button title="Sign Out" onPress={signOut} />
+        </View>
+      );
+    } else if (section.title === "Your Team Posts") {
+      return renderTeamItem({ item });
+    } else if (section.title === "Your Events/Tournaments") {
+      return renderPostedTournamentItem({ item });
+    } else if (section.title === "Favorite Tournaments") {
+      return renderFavoriteTournamentItem({ item });
+    }
+    return null;
+  };
+
+  const renderSectionHeader = ({ section }) => {
+    if (section.title !== "User Data") {
+      return (
+        <View style={styles.userTeamData}>
+          <Text>{section.title}:</Text>
+        </View>
+      );
+    }
+    return null;
+  };
+
   return (
     <View style={styles.container}>
-      <View style={styles.userData}>
-        {userData ? (
-          <>
-            <Text>Hi, {userData.firstName}</Text>
-            <Text>Welcome, {userData.email}</Text>
-          </>
-        ) : (
-          <Text>Loading user data...</Text>
-        )}
-      </View>
-      <Button title="Sign Out" onPress={signOut} />
-      <View style={styles.userTeamData}>
-        <Text>Your Team Posts:</Text>
-        <FlatList
-          style={styles.flatListView}
-          data={poolTeams}
-          renderItem={renderTeamItem}
-          keyExtractor={(item, index) => index.toString()}
-          refreshing={isLoading} // Set the refreshing prop to isLoading
-          onRefresh={fetchUserData}
-        />
-      </View>
-      <View style={styles.userTeamData}>
-        <Text>Your Events/Tournaments:</Text>
-        <FlatList
-          style={styles.flatListView}
-          data={postedTournaments}
-          renderItem={renderPostedTournamentItem}
-          keyExtractor={(item, index) => index.toString()}
-          refreshing={isLoading} // Set the refreshing prop to isLoading
-          onRefresh={fetchUserData}
-        />
-      </View>
+      <SectionList
+        sections={sections}
+        renderItem={renderItem}
+        renderSectionHeader={renderSectionHeader}
+        keyExtractor={(item, index) => index.toString()}
+        refreshing={isLoading}
+        onRefresh={fetchUserData}
+        contentContainerStyle={styles.sectionListContent}
+      />
     </View>
   );
 };
@@ -284,8 +320,12 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingTop: 60,
   },
+  sectionListContent: {
+    paddingBottom: 20,
+  },
   userData: {
     alignItems: "center",
+    marginBottom: 20,
   },
   flatListView: {
     padding: 15,
@@ -299,6 +339,8 @@ const styles = StyleSheet.create({
   teamItem: {
     backgroundColor: "#fff",
     padding: 20,
+    marginLeft: 15,
+    marginRight: 15,
     marginBottom: 10,
     borderRadius: 5,
     elevation: 2,
@@ -315,6 +357,9 @@ const styles = StyleSheet.create({
   },
   deleteButtonContainer: {
     marginLeft: 10,
+  },
+  loadingBar: {
+    zIndex: 50,
   },
 });
 

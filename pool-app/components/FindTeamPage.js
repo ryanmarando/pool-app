@@ -42,6 +42,7 @@ const FindTeamsPage = () => {
   }, []);
 
   const fetchPoolTeams = async () => {
+    setLoading(true);
     try {
       const querySnapshot = await getDocs(collection(db, "poolTeams"));
       const teams = querySnapshot.docs.map((doc) => ({
@@ -49,8 +50,10 @@ const FindTeamsPage = () => {
         ...doc.data(),
       }));
       setPoolTeams(teams);
+      setLoading(false);
       console.log("Loaded pool teams");
     } catch (error) {
+      setLoading(false);
       console.error("Error fetching pool teams:", error);
     }
   };
@@ -158,6 +161,8 @@ const FindTeamsPage = () => {
         data={poolTeams}
         renderItem={renderTeamItem}
         keyExtractor={(item) => item.id.toString()}
+        refreshing={loading}
+        onRefresh={fetchPoolTeams}
       />
       <Modal
         animationType="slide"

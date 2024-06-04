@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
   StyleSheet,
@@ -17,7 +17,8 @@ import { db } from "../firebaseConfig";
 import axios from "axios";
 import { Linking } from "react-native";
 import { getAuth } from "firebase/auth";
-import moment from "moment"; // Importing moment.js for date formatting
+import { useFocusEffect } from "@react-navigation/native";
+import Icon from "react-native-vector-icons/FontAwesome";
 
 const TournamentMapPage = () => {
   const [location, setLocation] = useState(null);
@@ -25,11 +26,15 @@ const TournamentMapPage = () => {
   const [loading, setLoading] = useState(true);
   const [locLoading, setLocLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
+  const [locationModalVisible, setlocationModalVisible] = useState(false);
   const [tournamentListVisible, setTournamentListVisible] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [selectedLocation, setSelectedLocation] = useState(null);
   const [mapReady, setMapReady] = useState(false);
+  const [countGoingButton, setCountGoingButton] = useState(false);
+  const [isFavorite, setIsFavorite] = useState(false);
+  const [visibleMarkers, setVisibleMarkers] = useState([]);
   const [newTournament, setNewTournament] = useState({
     title: "",
     description: "",
@@ -38,6 +43,11 @@ const TournamentMapPage = () => {
   });
   const auth = getAuth();
   const user = auth.currentUser;
+  const mapRef = useRef(null);
+
+  const toggleFavorite = () => {
+    setIsFavorite(!isFavorite);
+  };
 
   useEffect(() => {
     (async () => {
@@ -53,12 +63,15 @@ const TournamentMapPage = () => {
     })();
   }, []);
 
-  useEffect(() => {
-    // Fetch tournament locations from Firestore when component mounts
-    fetchTournamentLocations();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      // Fetch user data when the screen is focused
+      fetchTournamentLocations();
+    }, [])
+  );
 
   const handleMarkerPress = (location) => {
+    setCountGoingButton(false);
     setSelectedLocation(location);
     setlocationModalVisible(true);
   };
@@ -133,7 +146,7 @@ const TournamentMapPage = () => {
           longitude: lng,
           location: newTournament.location,
           time: newTournament.time,
-          createdBy: user.displayName, // Store the creator's name
+          countGoing: 1,
         };
 
         // Create a reference to a new document with the generated ID
@@ -169,6 +182,25 @@ const TournamentMapPage = () => {
     }
   };
 
+  const handleRegionChangeComplete = (region) => {
+    const { latitude, longitude, latitudeDelta, longitudeDelta } = region;
+    const minLat = latitude - latitudeDelta / 2;
+    const maxLat = latitude + latitudeDelta / 2;
+    const minLng = longitude - longitudeDelta / 2;
+    const maxLng = longitude + longitudeDelta / 2;
+
+    const markersInView = tournamentLocations.filter((loc) => {
+      return (
+        loc.latitude >= minLat &&
+        loc.latitude <= maxLat &&
+        loc.longitude >= minLng &&
+        loc.longitude <= maxLng
+      );
+    });
+
+    setVisibleMarkers(markersInView);
+  };
+
   const openMapsApp = (latitude, longitude) => {
     const location = `${latitude},${longitude}`;
     const appleMapsUrl = `http://maps.apple.com/?daddr=${location}&dirflg=d`;
@@ -191,16 +223,41 @@ const TournamentMapPage = () => {
   };
 
   const renderTournamentItem = ({ item }) => {
-    const formattedTime = moment(item.time).format("ddd, MMM D [AT] h A");
     return (
       <View style={styles.tournamentItem}>
-        <Text style={styles.tournamentTime}>{formattedTime}</Text>
+        <Text style={styles.tournamentTime}>{item.time}</Text>
         <Text style={styles.tournamentTitle}>{item.title}</Text>
         <Text style={styles.tournamentDescription}>{item.description}</Text>
         <Text style={styles.tournamentDescription}>At {item.location}</Text>
       </View>
     );
   };
+
+  const handleGoingToTournament = async () => {
+    try {
+      setCountGoingButton(true);
+      // Create a reference to a new document with the generated ID
+      const locationCountRef = doc(
+        db,
+        "tournamentLocations",
+        selectedLocation.id.toString()
+      );
+      const userLocSnap = await getDoc(locationCountRef);
+      const userLocData = userLocSnap.data();
+      const newCount = userLocData.countGoing + 1;
+      await setDoc(locationCountRef, { countGoing: newCount }, { merge: true });
+      fetchTournamentLocations();
+      console.log("Added a person going!");
+    } catch {
+      console.error("Error adding person to tournament");
+    }
+  };
+
+  const CustomCallout = ({ location }) => (
+    <View style={styles.callout}>
+      <Text style={styles.title}>{location.title}</Text>
+    </View>
+  );
 
   return (
     <View style={styles.container}>
@@ -216,6 +273,7 @@ const TournamentMapPage = () => {
         location && (
           <>
             <MapView
+              ref={mapRef}
               style={styles.map}
               initialRegion={{
                 latitude: location.coords.latitude,
@@ -230,6 +288,7 @@ const TournamentMapPage = () => {
                   setMapReady(true); // initially this state is false
                 }, 1000);
               }}
+              onRegionChangeComplete={handleRegionChangeComplete}
             >
               {tournamentLocations.map((loc) => (
                 <Marker
@@ -240,14 +299,10 @@ const TournamentMapPage = () => {
                   }}
                   onPress={() => handleMarkerPress(loc)}
                 >
-                  <Callout>
-                    <View style={styles.callout}>
-                      <Text style={styles.title}>{loc.title}</Text>
-                      <Text style={styles.description}>{loc.description}</Text>
-                      <Text style={styles.location}>{loc.time}</Text>
-                      <Text style={styles.location}>{loc.location}</Text>
-                    </View>
-                  </Callout>
+                  <View>
+                    <Icon name="map-marker" size={30} color="red" />
+                    <CustomCallout location={loc} />
+                  </View>
                 </Marker>
               ))}
             </MapView>
@@ -349,6 +404,17 @@ const TournamentMapPage = () => {
                 }}
               >
                 <View style={styles.modalView}>
+                  <TouchableOpacity
+                    style={styles.favoriteIcon}
+                    onPress={toggleFavorite}
+                  >
+                    <Icon
+                      name={isFavorite ? "star" : "star-o"}
+                      size={30}
+                      color={isFavorite ? "#FFD700" : "#000"}
+                    />
+                  </TouchableOpacity>
+
                   <View style={styles.modalContent}>
                     <Text style={styles.modalTitle}>
                       {selectedLocation.title}
@@ -356,27 +422,43 @@ const TournamentMapPage = () => {
                     <Text style={styles.modalDescription}>
                       {selectedLocation.description}
                     </Text>
-                    <Text style={styles.modalDescription}>
+
+                    <Text style={styles.modalLocation}>
                       {selectedLocation.location}
                     </Text>
-                    <Button
-                      title="Get directions"
-                      onPress={() =>
-                        openMapsApp(
-                          selectedLocation.latitude,
-                          selectedLocation.longitude
-                        )
-                      }
-                    ></Button>
-                    <Text style={styles.modalDescription}>
-                      {selectedLocation.time}
+                    <Text style={styles.modalLocation}>
+                      On {selectedLocation.time}
                     </Text>
+                    <View style={styles.getDirectionsButton}>
+                      <Button
+                        title="Get directions"
+                        onPress={() =>
+                          openMapsApp(
+                            selectedLocation.latitude,
+                            selectedLocation.longitude
+                          )
+                        }
+                      ></Button>
+                    </View>
                     <View>
-                      <Text>5 people are going.</Text>
-                      <Button title="Want to go?"></Button>
+                      {countGoingButton ? (
+                        // Show loading indicator when loading
+                        <Button title="See you there!"></Button>
+                      ) : (
+                        <View>
+                          <Text>
+                            {selectedLocation.countGoing} people are going!
+                          </Text>
+                          <Button
+                            title="Want to go?"
+                            onPress={handleGoingToTournament}
+                          ></Button>
+                        </View>
+                      )}
                     </View>
                     <Button
                       title="Close"
+                      color="red"
                       mode="contained"
                       onPress={() =>
                         setlocationModalVisible(!locationModalVisible)
@@ -439,7 +521,7 @@ const styles = StyleSheet.create({
     backgroundColor: "white",
     borderRadius: 20,
     padding: 35,
-    paddingBottom: 15,
+    paddingBottom: 7,
     paddingTop: 15,
     alignItems: "center",
     shadowColor: "#000",
@@ -464,14 +546,28 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   modalDescription: {
-    fontSize: 16,
-    marginBottom: 20,
+    fontSize: 15,
+    marginBottom: 8,
     textAlign: "center",
+  },
+  modalLocation: {
+    fontSize: 18,
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  getDirectionsButton: {
+    paddingBottom: 15,
   },
   modalTextViewHeader: {
     fontWeight: "bold",
     fontSize: 24,
     marginBottom: 15,
+  },
+  favoriteIcon: {
+    position: "absolute",
+    top: 20,
+    right: 20,
+    zIndex: 1,
   },
   input: {
     height: 40,
