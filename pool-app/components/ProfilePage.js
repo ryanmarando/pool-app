@@ -15,6 +15,7 @@ import {
   deleteDoc,
   updateDoc,
   arrayRemove,
+  setDoc,
 } from "firebase/firestore";
 import { db } from "../firebaseConfig";
 import Icon from "react-native-vector-icons/FontAwesome";
@@ -25,6 +26,7 @@ const ProfileScreen = ({ navigation }) => {
   const [poolTeams, setPoolTeams] = useState([]);
   const [postedTournaments, setPostedTournaments] = useState([]);
   const [favoriteTournaments, setFavoriteTournaments] = useState([]);
+  const [goingTournaments, setGoingTournaments] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isFavorite, setIsFavorite] = useState(true);
 
@@ -36,6 +38,7 @@ const ProfileScreen = ({ navigation }) => {
       if (userDoc.exists()) {
         const data = userDoc.data();
         setUserData(data);
+        // Favorites
         if (
           data.FavoriteTournamentsId &&
           Array.isArray(data.FavoriteTournamentsId)
@@ -44,11 +47,21 @@ const ProfileScreen = ({ navigation }) => {
         } else {
           console.log("FavoriteTournamentsId is not an array or is undefined.");
         }
+        // Goings
+        if (data.GoingTournamentsId && Array.isArray(data.GoingTournamentsId)) {
+          fetchGoingTournaments(data.GoingTournamentsId);
+        } else {
+          console.log("GoingTournamentsId is not an array or is undefined.");
+        }
+
+        // Team Postings
         if (data.PoolTeamsId && Array.isArray(data.PoolTeamsId)) {
           fetchPoolTeams(data.PoolTeamsId);
         } else {
           console.log("PoolTeamsId is not an array or is undefined.");
         }
+
+        // Tournament Postings
         if (data.TournamentsId && Array.isArray(data.TournamentsId)) {
           fetchPostedTournaments(data.TournamentsId);
         } else {
@@ -108,19 +121,19 @@ const ProfileScreen = ({ navigation }) => {
           if (id) {
             const idStr = String(id); // Ensure the ID is a string
             try {
-              console.log(`Fetching team document for ID: ${idStr}`);
+              console.log(`Fetching posted document for ID: ${idStr}`);
               const tournamentDoc = await getDoc(
                 doc(db, "tournamentLocations", idStr)
               );
               if (tournamentDoc.exists()) {
                 return tournamentDoc.data();
               } else {
-                console.log(`No team document found for ID: ${idStr}`);
+                console.log(`No posted document found for ID: ${idStr}`);
                 return null;
               }
             } catch (error) {
               console.error(
-                `Error fetching team document for ID: ${idStr}`,
+                `Error fetching posted document for ID: ${idStr}`,
                 error
               );
               return null;
@@ -151,19 +164,27 @@ const ProfileScreen = ({ navigation }) => {
           if (id) {
             const idStr = String(id); // Ensure the ID is a string
             try {
-              console.log(`Fetching team document for ID: ${idStr}`);
+              console.log(`Fetching favorite document for ID: ${idStr}`);
               const tournamentDoc = await getDoc(
                 doc(db, "tournamentLocations", idStr)
               );
               if (tournamentDoc.exists()) {
                 return tournamentDoc.data();
               } else {
-                console.log(`No team document found for ID: ${idStr}`);
+                console.log(`No favorite document found for ID: ${idStr}`);
+                // Delete that out of the list if it got deleted
+                const userRef = doc(db, "users", user.uid);
+                // Only call arrayRemove if id is not null or undefined
+                await updateDoc(userRef, {
+                  FavoriteTournamentsId: arrayRemove(id),
+                });
+
+                console.log(`Deleted favorite with ID: ${id}`);
                 return null;
               }
             } catch (error) {
               console.error(
-                `Error fetching team document for ID: ${idStr}`,
+                `Error fetching favorite document for ID: ${idStr}`,
                 error
               );
               return null;
@@ -180,6 +201,58 @@ const ProfileScreen = ({ navigation }) => {
       setFavoriteTournaments(
         tournaments.filter((tournament) => tournament !== null)
       );
+      setIsLoading(false);
+    } catch (error) {
+      console.error("Error fetching posted tournaments:", error);
+    }
+  };
+
+  const fetchGoingTournaments = async (tournamentIds) => {
+    console.log("Fetching going tournament IDs:", tournamentIds);
+    try {
+      const tournaments = await Promise.all(
+        tournamentIds.map(async (id) => {
+          if (id) {
+            const idStr = String(id); // Ensure the ID is a string
+            try {
+              console.log(`Fetching going document for ID: ${idStr}`);
+              const tournamentDoc = await getDoc(
+                doc(db, "tournamentLocations", idStr)
+              );
+              if (tournamentDoc.exists()) {
+                return tournamentDoc.data();
+              } else {
+                console.log(`No going document found for ID: ${idStr}`);
+                // Delete that out of the list if it got deleted
+                const userRef = doc(db, "users", user.uid);
+                // Only call arrayRemove if id is not null or undefined
+                await updateDoc(userRef, {
+                  GoingTournamentsId: arrayRemove(id),
+                });
+
+                console.log(`Deleted going with ID because was deleted: ${id}`);
+                return null;
+              }
+            } catch (error) {
+              console.error(
+                `Error fetching going document for ID: ${idStr}`,
+                error
+              );
+              return null;
+            }
+          } else {
+            console.log(
+              "Encountered an undefined or invalid goingTournamentID:",
+              id
+            );
+            return null;
+          }
+        })
+      );
+      setGoingTournaments(
+        tournaments.filter((tournament) => tournament !== null)
+      );
+
       setIsLoading(false);
     } catch (error) {
       console.error("Error fetching posted tournaments:", error);
@@ -259,6 +332,25 @@ const ProfileScreen = ({ navigation }) => {
     } catch (error) {
       console.error(`Error deleting team with ID: ${id}`, error);
     }
+  };
+
+  const RemoveFromUserData = async (id) => {
+    setGoingTournaments((prevTournaments) =>
+      prevTournaments.filter((tournament) => tournament.id !== id)
+    );
+    const locationCountRef = doc(db, "tournamentLocations", id.toString());
+    const userLocSnap = await getDoc(locationCountRef);
+    const userLocData = userLocSnap.data();
+    const newCount = userLocData.countGoing - 1;
+    await setDoc(locationCountRef, { countGoing: newCount }, { merge: true });
+    const userRef = doc(db, "users", user.uid);
+    if (id) {
+      // Only call arrayRemove if id is not null or undefined
+      await updateDoc(userRef, {
+        GoingTournamentsId: arrayRemove(id),
+      });
+    }
+    console.log("Removed RSVP");
   };
 
   const renderTeamItem = ({ item }) => (
@@ -341,6 +433,31 @@ const ProfileScreen = ({ navigation }) => {
     </View>
   );
 
+  const renderGoingTournamentItem = ({ item }) => (
+    <View style={styles.teamItem}>
+      {item ? (
+        <>
+          <View style={styles.teamInfo}>
+            <Text style={styles.teamName}>{item.title}</Text>
+            <Text>Description: {item.description}</Text>
+            <Text>{item.time}</Text>
+            <Text>{item.location}</Text>
+            <Text>There are {item.countGoing} people signed up!</Text>
+          </View>
+          <View style={styles.deleteButtonContainer}>
+            <Button
+              title="Cancel RSVP"
+              color="red"
+              onPress={() => RemoveFromUserData(item.id)}
+            />
+          </View>
+        </>
+      ) : (
+        <ActivityIndicator color="#007bff" size="small" />
+      )}
+    </View>
+  );
+
   if (!user) {
     return null; // Render nothing if the user is not authenticated
   }
@@ -349,6 +466,10 @@ const ProfileScreen = ({ navigation }) => {
     {
       title: "User Data",
       data: [{ type: "userData" }],
+    },
+    {
+      title: "RSVP'd Tournaments",
+      data: goingTournaments,
     },
     {
       title: "Favorite Tournaments",
@@ -384,6 +505,8 @@ const ProfileScreen = ({ navigation }) => {
       return renderPostedTournamentItem({ item });
     } else if (section.title === "Favorite Tournaments") {
       return renderFavoriteTournamentItem({ item });
+    } else if (section.title === "RSVP'd Tournaments") {
+      return renderGoingTournamentItem({ item });
     }
     return null;
   };

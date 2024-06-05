@@ -42,8 +42,8 @@ const TournamentMapPage = () => {
   const [successMessage, setSuccessMessage] = useState("");
   const [selectedLocation, setSelectedLocation] = useState(null);
   const [mapReady, setMapReady] = useState(false);
-  const [countGoingButton, setCountGoingButton] = useState(false);
   const [isFavorite, setIsFavorite] = useState(false);
+  const [isGoing, setIsGoing] = useState(false);
   const [filteredTournaments, setFilteredTournaments] = useState([]);
   const [isFiltered, setIsFiltered] = useState(false);
   const [visible, setVisible] = useState(false);
@@ -84,13 +84,13 @@ const TournamentMapPage = () => {
 
   const handleMarkerPress = async (location) => {
     if (!user) {
-      setCountGoingButton(false);
+      setIsGoing(false);
       setSelectedLocation(location);
       setlocationModalVisible(true);
       setIsFavorite(false);
       return;
     }
-    setCountGoingButton(false);
+    setIsGoing(false);
     setSelectedLocation(location);
     const userRef = doc(db, "users", user.uid);
     const userSnap = await getDoc(userRef);
@@ -103,6 +103,15 @@ const TournamentMapPage = () => {
       setIsFavorite(true);
     } else {
       setIsFavorite(false);
+    }
+    if (
+      user &&
+      userTeamData.GoingTournamentsId &&
+      userTeamData.GoingTournamentsId.includes(location.id)
+    ) {
+      setIsGoing(true);
+    } else {
+      setIsGoing(false);
     }
     setlocationModalVisible(true);
   };
@@ -342,7 +351,7 @@ const TournamentMapPage = () => {
         </View>
         <View style={styles.directionButtonContainer}>
           <Button
-            title="Get directions"
+            title="Get Directions"
             onPress={() => openMapsApp(item.latitude, item.longitude)}
           />
         </View>
@@ -352,7 +361,7 @@ const TournamentMapPage = () => {
 
   const handleGoingToTournament = async () => {
     try {
-      setCountGoingButton(true);
+      setIsGoing(true);
       // Create a reference to a new document with the generated ID
       const locationCountRef = doc(
         db,
@@ -363,6 +372,34 @@ const TournamentMapPage = () => {
       const userLocData = userLocSnap.data();
       const newCount = userLocData.countGoing + 1;
       await setDoc(locationCountRef, { countGoing: newCount }, { merge: true });
+
+      // Enter on user
+      const userRef = doc(db, "users", user.uid);
+      const userSnap = await getDoc(userRef);
+      const userTeamData = userSnap.data();
+
+      // Check if the `id` field exists and is an array
+      if (Array.isArray(userTeamData?.GoingTournamentsId)) {
+        console.log("updating exisiting");
+        // Append the new value to the array
+        const updatedArray = [
+          ...userTeamData.GoingTournamentsId,
+          selectedLocation.id,
+        ];
+
+        // Update the Firestore document with the modified data
+        await setDoc(
+          userRef,
+          { GoingTournamentsId: updatedArray },
+          { merge: true }
+        );
+        console.log("Array updated successfully.");
+      } else {
+        console.log("new field");
+        id = { GoingTournamentsId: [selectedLocation.id] };
+        await setDoc(doc(db, "users", user.uid), id, { merge: true });
+      }
+      console.log("User is going to ", selectedLocation.id);
       fetchTournamentLocations();
       console.log("Added a person going!");
     } catch {
@@ -370,9 +407,40 @@ const TournamentMapPage = () => {
     }
   };
 
+  const handleRemoveFromGoing = async () => {
+    try {
+      setIsGoing(false);
+      // Create a reference to a new document with the generated ID
+      const locationCountRef = doc(
+        db,
+        "tournamentLocations",
+        selectedLocation.id.toString()
+      );
+      const userLocSnap = await getDoc(locationCountRef);
+      const userLocData = userLocSnap.data();
+      const newCount = userLocData.countGoing - 1;
+      await setDoc(locationCountRef, { countGoing: newCount }, { merge: true });
+
+      const userRef = doc(db, "users", user.uid);
+      // Only call arrayRemove if id is not null or undefined
+      await updateDoc(userRef, {
+        GoingTournamentsId: arrayRemove(selectedLocation.id),
+      });
+
+      console.log(`Deleted going tournament with ID: ${selectedLocation.id}`);
+      fetchTournamentLocations();
+      console.log("Removed a person going!");
+    } catch {
+      console.error("Error removing person to tournament");
+    }
+  };
+
   const CustomCallout = ({ location }) => (
     <View style={styles.callout}>
-      <Text style={styles.title}>{location.title}</Text>
+      <View style={styles.titleCallout}>
+        <Text style={styles.title}>{location.title}</Text>
+      </View>
+      <Icon name="map-marker" size={30} color="red" />
     </View>
   );
 
@@ -416,7 +484,6 @@ const TournamentMapPage = () => {
                   onPress={() => handleMarkerPress(loc)}
                 >
                   <View>
-                    <Icon name="map-marker" size={30} color="red" />
                     <CustomCallout location={loc} />
                   </View>
                 </Marker>
@@ -553,7 +620,7 @@ const TournamentMapPage = () => {
                     </Text>
                     <View style={styles.getDirectionsButton}>
                       <Button
-                        title="Get directions"
+                        title="Get Directions"
                         onPress={() =>
                           openMapsApp(
                             selectedLocation.latitude,
@@ -563,9 +630,14 @@ const TournamentMapPage = () => {
                       ></Button>
                     </View>
                     <View>
-                      {countGoingButton ? (
+                      {isGoing ? (
                         // Show loading indicator when loading
-                        <Button title="See you there!"></Button>
+                        <View>
+                          <Button
+                            title="See you there! Tap to cancel."
+                            onPress={handleRemoveFromGoing}
+                          ></Button>
+                        </View>
                       ) : (
                         <View>
                           <Text>
@@ -671,7 +743,9 @@ const styles = StyleSheet.create({
     right: 10,
     flexDirection: "row",
     justifyContent: "space-between",
-    width: 220,
+    marginRight: 50,
+    backgroundColor: "lightgrey",
+    borderRadius: 10,
   },
   modalView: {
     margin: 20,
@@ -737,11 +811,18 @@ const styles = StyleSheet.create({
     paddingLeft: 8,
   },
   callout: {
+    flex: 1,
     flexDirection: "column",
-    alignItems: "flex-start",
+    alignItems: "center",
+    justifyContent: "center",
   },
   title: {
     fontWeight: "bold",
+  },
+  titleCallout: {
+    backgroundColor: "#00a9ff",
+    padding: 5,
+    borderRadius: 10,
   },
   location: {
     color: "gray",

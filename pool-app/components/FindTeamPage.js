@@ -104,9 +104,8 @@ const FindTeamsPage = () => {
       };
       const teamRef = doc(db, "poolTeams", id.toString());
 
-      await setDoc(teamRef, teamData, { merge: true }); // add team data to database
+      await setDoc(teamRef, teamData, { merge: true });
       await appendToUserDataBaseArray(teamData.id);
-      //await setDoc(doc(db, "users", user.uid), userTeamData, { merge: true }); // add that data post to the user to display on profile page
       console.log("added");
       setSuccessMessage("Post added successfully");
       setTimeout(() => {
@@ -226,8 +225,8 @@ const FindTeamsPage = () => {
             <Paragraph>{error}</Paragraph>
           </Dialog.Content>
           <Dialog.Actions>
-            <Button title="OK" onPress={hideDialog}>
-              OK
+            <Button title="Ok" onPress={hideDialog}>
+              Ok
             </Button>
             <Button
               title="Sign In"
