@@ -370,13 +370,12 @@ const ProfileScreen = ({ navigation }) => {
         <View style={styles.userData}>
           {userData ? (
             <>
-              <Text>Hi, {userData.firstName}</Text>
-              <Text>Welcome, {userData.email}</Text>
+              <Text style={styles.teamName}>Hi, {userData.firstName}</Text>
             </>
           ) : (
             <Text>Loading user data...</Text>
           )}
-          <Button title="Sign Out" onPress={signOut} color={"yellow"} />
+          <Button title="Sign Out" onPress={signOut} color={"red"} />
         </View>
       );
     } else if (section.title === "Your Team Posts") {

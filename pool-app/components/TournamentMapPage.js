@@ -324,7 +324,7 @@ const TournamentMapPage = () => {
       const filtered = filterTournamentsByDistance(
         tournamentLocations,
         location.coords,
-        50 // Filter within 50 km
+        80 // Filter within 80 km
       );
       setFilteredTournaments(filtered);
       setIsFiltered(!isFiltered);
