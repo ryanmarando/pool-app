@@ -14,6 +14,7 @@ import FindTeamsPage from "./components/FindTeamPage";
 import ProfileScreen from "./components/ProfilePage";
 import SignInPage from "./components/SignInPage";
 import SignUpPage from "./components/SignUpPage";
+import { MapProvider } from "./components/MapContext";
 
 const Stack = createStackNavigator();
 
@@ -21,7 +22,7 @@ const AppNavigator = () => {
   const { user } = useAuth();
 
   return (
-    <Stack.Navigator initialRouteName="FullMap">
+    <Stack.Navigator detachInactiveScreens={false}>
       <Stack.Screen
         name="Home"
         component={HomeScreen}
@@ -35,7 +36,11 @@ const AppNavigator = () => {
       <Stack.Screen
         name="FullMap"
         component={TournamentMapPage}
-        options={{ headerShown: false, ...TransitionPresets.SlideFromRightIOS }}
+        options={{
+          headerShown: false,
+          ...TransitionPresets.SlideFromRightIOS,
+          unmountOnBlur: false,
+        }}
       />
       <Stack.Screen
         name="FindTeam"
@@ -60,10 +65,12 @@ const App = () => {
   return (
     <AuthProvider>
       <PaperProvider>
-        <NavigationContainer>
-          <AppNavigator />
-          <BottomTabNavigator />
-        </NavigationContainer>
+        <MapProvider>
+          <NavigationContainer>
+            <AppNavigator />
+            <BottomTabNavigator />
+          </NavigationContainer>
+        </MapProvider>
       </PaperProvider>
     </AuthProvider>
   );

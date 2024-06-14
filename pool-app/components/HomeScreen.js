@@ -29,10 +29,6 @@ const HomeScreen = () => {
                 Browse the map of pool places!
               </Paragraph>
             </Card.Content>
-            <Card.Cover
-              style={styles.cardCover}
-              source={FindTourneyNearYouImage}
-            />
             <Card.Actions>
               <Button
                 mode="contained"
@@ -44,12 +40,11 @@ const HomeScreen = () => {
           </Card>
           <Card style={styles.card}>
             <Card.Content>
-              <Title style={styles.cardTitle}>Find a Team</Title>
+              <Title style={styles.cardTitle}>Find a Player</Title>
               <Paragraph style={styles.cardParagraph}>
                 See groups of people looking for an extra person!
               </Paragraph>
             </Card.Content>
-            <Card.Cover style={styles.cardCover} source={FindTeamImage} />
             <Card.Actions>
               <Button
                 mode="contained"
@@ -62,15 +57,12 @@ const HomeScreen = () => {
 
           <Card style={styles.card}>
             <Card.Content>
-              <Title style={styles.cardTitle}>Create Your Own Tournament</Title>
+              <Title style={styles.cardTitle}>Post Your Own Tournament</Title>
               <Paragraph style={styles.cardParagraph}>
-                Create your own tournament for pool players to see.
+                Post your own tournament for pool players to see.
               </Paragraph>
             </Card.Content>
-            <Card.Cover
-              style={styles.cardCover}
-              source={PostTourneyNearYouImage}
-            />
+
             <Card.Actions>
               <Button
                 mode="contained"
@@ -161,4 +153,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default HomeScreen;
+export default React.memo(HomeScreen);

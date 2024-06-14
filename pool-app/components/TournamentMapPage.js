@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  useContext,
+} from "react";
 import {
   View,
   StyleSheet,
@@ -29,11 +35,10 @@ import { getAuth } from "firebase/auth";
 import { useFocusEffect } from "@react-navigation/native";
 import Icon from "react-native-vector-icons/FontAwesome";
 import { useNavigation } from "@react-navigation/native";
+import { MapContext } from "./MapContext";
 
 const TournamentMapPage = () => {
-  const [location, setLocation] = useState(null);
   const [tournamentLocations, setTournamentLocations] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [locLoading, setLocLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [locationModalVisible, setlocationModalVisible] = useState(false);
@@ -60,20 +65,7 @@ const TournamentMapPage = () => {
   const user = auth.currentUser;
   const mapRef = useRef(null);
   const navigation = useNavigation();
-
-  useEffect(() => {
-    (async () => {
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") {
-        console.error("Permission to access location was denied");
-        return;
-      }
-
-      let location = await Location.getCurrentPositionAsync({});
-      setLocation(location);
-      setLoading(false);
-    })();
-  }, []);
+  const { location, loading } = useContext(MapContext);
 
   useFocusEffect(
     useCallback(() => {
@@ -444,16 +436,34 @@ const TournamentMapPage = () => {
     </View>
   );
 
-  return (
-    <View style={styles.container}>
-      {loading ? (
-        // Show activity indicator while loading
+  if (loading) {
+    return (
+      <View style={styles.container}>
         <View>
           <ActivityIndicator size="large" color="#0000ff" />
           <Text style={styles.loadingText}>
             Loading pool places near you...
           </Text>
         </View>
+      </View>
+    ); // Render loading indicator while location is being fetched
+  }
+
+  // Check if location is available
+  if (!location) {
+    return (
+      <View style={styles.container}>
+        <Text>Location not available</Text>
+      </View>
+    );
+  }
+  const { latitude, longitude } = location.coords;
+
+  return (
+    <View style={styles.container}>
+      {loading ? (
+        // Show activity indicator while loading
+        <View></View>
       ) : (
         location && (
           <>
@@ -461,8 +471,8 @@ const TournamentMapPage = () => {
               ref={mapRef}
               style={styles.map}
               initialRegion={{
-                latitude: location.coords.latitude,
-                longitude: location.coords.longitude,
+                latitude,
+                longitude,
                 latitudeDelta: 0.0922,
                 longitudeDelta: 0.0421,
               }}
@@ -899,4 +909,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default TournamentMapPage;
+export default React.memo(TournamentMapPage);
