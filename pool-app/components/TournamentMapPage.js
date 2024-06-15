@@ -1,10 +1,4 @@
-import React, {
-  useState,
-  useEffect,
-  useCallback,
-  useRef,
-  useContext,
-} from "react";
+import React, { useState, useCallback, useRef, useContext } from "react";
 import {
   View,
   StyleSheet,
@@ -16,8 +10,7 @@ import {
   FlatList,
   TouchableOpacity,
 } from "react-native";
-import MapView, { Marker, Callout } from "react-native-maps";
-import * as Location from "expo-location";
+import MapView, { Marker } from "react-native-maps";
 import {
   doc,
   setDoc,
@@ -27,7 +20,7 @@ import {
   updateDoc,
   arrayRemove,
 } from "firebase/firestore";
-import { Dialog, Portal, Paragraph } from "react-native-paper";
+import { Dialog, Portal, Paragraph, Checkbox } from "react-native-paper";
 import { db } from "../firebaseConfig";
 import axios from "axios";
 import { Linking } from "react-native";
@@ -36,6 +29,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import Icon from "react-native-vector-icons/FontAwesome";
 import { useNavigation } from "@react-navigation/native";
 import { MapContext } from "./MapContext";
+import { openLink } from "../functions/openLink";
 
 const TournamentMapPage = () => {
   const [tournamentLocations, setTournamentLocations] = useState([]);
@@ -48,18 +42,22 @@ const TournamentMapPage = () => {
   const [selectedLocation, setSelectedLocation] = useState(null);
   const [mapReady, setMapReady] = useState(false);
   const [isFavorite, setIsFavorite] = useState(false);
-  const [isGoing, setIsGoing] = useState(false);
   const [filteredTournaments, setFilteredTournaments] = useState([]);
   const [isFiltered, setIsFiltered] = useState(false);
   const [visible, setVisible] = useState(false);
   const [error, setError] = useState("");
   const showDialog = () => setVisible(true);
   const hideDialog = () => setVisible(false);
+  const [weeklyChecked, setWeeklyChecked] = useState(false);
+  const [oneTimeChecked, setOneTimeChecked] = useState(true);
   const [newTournament, setNewTournament] = useState({
     title: "",
     description: "",
     location: "",
     time: "",
+    weeklyChecked: weeklyChecked,
+    oneTimeChecked: oneTimeChecked,
+    faceBookLink: "",
   });
   const auth = getAuth();
   const user = auth.currentUser;
@@ -76,13 +74,12 @@ const TournamentMapPage = () => {
 
   const handleMarkerPress = async (location) => {
     if (!user) {
-      setIsGoing(false);
       setSelectedLocation(location);
       setlocationModalVisible(true);
       setIsFavorite(false);
       return;
     }
-    setIsGoing(false);
+
     setSelectedLocation(location);
     const userRef = doc(db, "users", user.uid);
     const userSnap = await getDoc(userRef);
@@ -101,9 +98,7 @@ const TournamentMapPage = () => {
       userTeamData.GoingTournamentsId &&
       userTeamData.GoingTournamentsId.includes(location.id)
     ) {
-      setIsGoing(true);
     } else {
-      setIsGoing(false);
     }
     setlocationModalVisible(true);
   };
@@ -208,8 +203,13 @@ const TournamentMapPage = () => {
       !newTournament.location ||
       !newTournament.time
     ) {
-      setErrorMessage("All fields are required");
-      setTimeout(() => setErrorMessage(""), 5000); // Clear success message after 5 seconds
+      setErrorMessage("More fields are required");
+      setTimeout(() => setErrorMessage(""), 5000);
+      return;
+    }
+    if (!weeklyChecked && !oneTimeChecked) {
+      setErrorMessage("Please choose if this is weekly or a one time event");
+      setTimeout(() => setErrorMessage(""), 5000);
       return;
     }
     setLocLoading(true);
@@ -230,7 +230,9 @@ const TournamentMapPage = () => {
           longitude: lng,
           location: newTournament.location,
           time: newTournament.time,
-          countGoing: 1,
+          weeklyChecked: weeklyChecked,
+          oneTimeChecked: oneTimeChecked,
+          faceBookLink: newTournament.faceBookLink,
         };
 
         // Create a reference to a new document with the generated ID
@@ -251,7 +253,10 @@ const TournamentMapPage = () => {
           description: "",
           location: "",
           time: "",
+          faceBookLink: "",
         });
+        setWeeklyChecked(false);
+        setOneTimeChecked(true);
       } else {
         console.error("Location not found");
         setErrorMessage("Location not found");
@@ -346,85 +351,21 @@ const TournamentMapPage = () => {
             title="Get Directions"
             onPress={() => openMapsApp(item.latitude, item.longitude)}
           />
+          <View>
+            {item.faceBookLink ? (
+              <View>
+                <Button
+                  title="Facebook event"
+                  onPress={() => openLink(item.faceBookLink)}
+                ></Button>
+              </View>
+            ) : (
+              <View></View>
+            )}
+          </View>
         </View>
       </View>
     );
-  };
-
-  const handleGoingToTournament = async () => {
-    try {
-      setIsGoing(true);
-      // Create a reference to a new document with the generated ID
-      const locationCountRef = doc(
-        db,
-        "tournamentLocations",
-        selectedLocation.id.toString()
-      );
-      const userLocSnap = await getDoc(locationCountRef);
-      const userLocData = userLocSnap.data();
-      const newCount = userLocData.countGoing + 1;
-      await setDoc(locationCountRef, { countGoing: newCount }, { merge: true });
-
-      // Enter on user
-      const userRef = doc(db, "users", user.uid);
-      const userSnap = await getDoc(userRef);
-      const userTeamData = userSnap.data();
-
-      // Check if the `id` field exists and is an array
-      if (Array.isArray(userTeamData?.GoingTournamentsId)) {
-        console.log("updating exisiting");
-        // Append the new value to the array
-        const updatedArray = [
-          ...userTeamData.GoingTournamentsId,
-          selectedLocation.id,
-        ];
-
-        // Update the Firestore document with the modified data
-        await setDoc(
-          userRef,
-          { GoingTournamentsId: updatedArray },
-          { merge: true }
-        );
-        console.log("Array updated successfully.");
-      } else {
-        console.log("new field");
-        id = { GoingTournamentsId: [selectedLocation.id] };
-        await setDoc(doc(db, "users", user.uid), id, { merge: true });
-      }
-      console.log("User is going to ", selectedLocation.id);
-      fetchTournamentLocations();
-      console.log("Added a person going!");
-    } catch {
-      console.error("Error adding person to tournament");
-    }
-  };
-
-  const handleRemoveFromGoing = async () => {
-    try {
-      setIsGoing(false);
-      // Create a reference to a new document with the generated ID
-      const locationCountRef = doc(
-        db,
-        "tournamentLocations",
-        selectedLocation.id.toString()
-      );
-      const userLocSnap = await getDoc(locationCountRef);
-      const userLocData = userLocSnap.data();
-      const newCount = userLocData.countGoing - 1;
-      await setDoc(locationCountRef, { countGoing: newCount }, { merge: true });
-
-      const userRef = doc(db, "users", user.uid);
-      // Only call arrayRemove if id is not null or undefined
-      await updateDoc(userRef, {
-        GoingTournamentsId: arrayRemove(selectedLocation.id),
-      });
-
-      console.log(`Deleted going tournament with ID: ${selectedLocation.id}`);
-      fetchTournamentLocations();
-      console.log("Removed a person going!");
-    } catch {
-      console.error("Error removing person to tournament");
-    }
   };
 
   const CustomCallout = ({ location }) => (
@@ -535,16 +476,18 @@ const TournamentMapPage = () => {
                 <TextInput
                   style={styles.input}
                   placeholder="Title"
-                  placeholderTextColor="#333" // Darker placeholder color
+                  placeholderTextColor="#333"
                   value={newTournament.title}
                   onChangeText={(text) =>
                     setNewTournament({ ...newTournament, title: text })
                   }
                 />
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, { padding: 10 }]}
                   placeholder="Description"
-                  placeholderTextColor="#333" // Darker placeholder color
+                  multiline
+                  numberOfLines={4}
+                  placeholderTextColor="#333"
                   value={newTournament.description}
                   onChangeText={(text) =>
                     setNewTournament({ ...newTournament, description: text })
@@ -552,24 +495,78 @@ const TournamentMapPage = () => {
                 />
                 <TextInput
                   style={styles.input}
-                  placeholder="Time"
-                  placeholderTextColor="#333" // Darker placeholder color
+                  placeholder="Date & Time"
+                  placeholderTextColor="#333"
                   value={newTournament.time}
                   onChangeText={(text) =>
                     setNewTournament({ ...newTournament, time: text })
                   }
                 />
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    marginBottom: 12,
+                  }}
+                >
+                  <View
+                    style={{
+                      borderWidth: 1,
+                      borderColor: "gray",
+                      padding: 0.1,
+                      marginRight: 6,
+                    }}
+                  >
+                    <Checkbox
+                      status={oneTimeChecked ? "checked" : "unchecked"}
+                      onPress={() => {
+                        setOneTimeChecked(!oneTimeChecked);
+                        setWeeklyChecked(false);
+                      }}
+                    />
+                  </View>
+                  <Text style={[styles.label, (style = { paddingRight: 6 })]}>
+                    One Time Event
+                  </Text>
+                  <View
+                    style={{
+                      borderWidth: 1,
+                      borderColor: "gray",
+                      padding: 0.1,
+                      marginRight: 6,
+                    }}
+                  >
+                    <Checkbox
+                      status={weeklyChecked ? "checked" : "unchecked"}
+                      onPress={() => {
+                        setWeeklyChecked(!weeklyChecked);
+                        setOneTimeChecked(false);
+                      }}
+                    />
+                  </View>
+                  <Text style={styles.label}>Weekly Event</Text>
+                </View>
+
                 <TextInput
                   style={styles.input}
                   placeholder="Address"
-                  placeholderTextColor="#333" // Darker placeholder color
+                  placeholderTextColor="#333"
                   value={newTournament.location}
                   onChangeText={(text) =>
                     setNewTournament({ ...newTournament, location: text })
                   }
                 />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Facebook link (optional)"
+                  placeholderTextColor="#333"
+                  value={newTournament.faceBookLink}
+                  onChangeText={(text) =>
+                    setNewTournament({ ...newTournament, faceBookLink: text })
+                  }
+                />
                 {locLoading ? (
-                  <ActivityIndicator size="small" color="#007bff" /> // Show loading indicator when loading
+                  <ActivityIndicator size="small" color="#007bff" />
                 ) : (
                   <>
                     <Button
@@ -625,10 +622,18 @@ const TournamentMapPage = () => {
                     <Text style={styles.modalLocation}>
                       {selectedLocation.location}
                     </Text>
-                    <Text style={styles.modalLocation}>
-                      On {selectedLocation.time}
-                    </Text>
-                    <View style={styles.getDirectionsButton}>
+
+                    {selectedLocation.oneTimeChecked ? (
+                      <Text style={styles.modalLocation}>
+                        {selectedLocation.time}
+                      </Text>
+                    ) : (
+                      <Text style={styles.modalLocation}>
+                        Every week: {selectedLocation.time}
+                      </Text>
+                    )}
+
+                    <View>
                       <Button
                         title="Get Directions"
                         onPress={() =>
@@ -640,24 +645,17 @@ const TournamentMapPage = () => {
                       ></Button>
                     </View>
                     <View>
-                      {isGoing ? (
-                        // Show loading indicator when loading
+                      {selectedLocation.faceBookLink ? (
                         <View>
                           <Button
-                            title="See you there! Tap to cancel."
-                            onPress={handleRemoveFromGoing}
+                            title="Facebook Event Page"
+                            onPress={() =>
+                              openLink(selectedLocation.faceBookLink)
+                            }
                           ></Button>
                         </View>
                       ) : (
-                        <View>
-                          <Text>
-                            {selectedLocation.countGoing} people are going!
-                          </Text>
-                          <Button
-                            title="Want to go?"
-                            onPress={handleGoingToTournament}
-                          ></Button>
-                        </View>
+                        <View></View>
                       )}
                     </View>
                     <Button
@@ -680,7 +678,6 @@ const TournamentMapPage = () => {
             >
               <View style={styles.modalView}>
                 {isFiltered ? (
-                  // Show loading indicator when loading
                   <Button
                     title="Unfilter"
                     onPress={handleFilterTournamentsByDistance}
@@ -777,7 +774,7 @@ const styles = StyleSheet.create({
     maxHeight: 600,
   },
   modalContent: {
-    width: 300,
+    width: 250,
     padding: 10,
     backgroundColor: "white",
     borderRadius: 10,
@@ -787,6 +784,7 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: "bold",
     marginBottom: 10,
+    textAlign: "center",
   },
   modalDescription: {
     fontSize: 15,
