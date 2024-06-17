@@ -9,6 +9,7 @@ import {
   TextInput,
   FlatList,
   TouchableOpacity,
+  TouchableWithoutFeedback,
 } from "react-native";
 import MapView, { Marker } from "react-native-maps";
 import {
@@ -20,7 +21,13 @@ import {
   updateDoc,
   arrayRemove,
 } from "firebase/firestore";
-import { Dialog, Portal, Paragraph, Checkbox } from "react-native-paper";
+import {
+  Dialog,
+  Portal,
+  Paragraph,
+  Checkbox,
+  Provider,
+} from "react-native-paper";
 import { db } from "../firebaseConfig";
 import axios from "axios";
 import { Linking } from "react-native";
@@ -30,26 +37,31 @@ import Icon from "react-native-vector-icons/FontAwesome";
 import { useNavigation } from "@react-navigation/native";
 import { MapContext } from "./MapContext";
 import { openLink } from "../functions/openLink";
+import HeaderButton from "../components/HeaderButton";
 
-const TournamentMapPage = () => {
+const TournamentMapPage = ({ route }) => {
   const [tournamentLocations, setTournamentLocations] = useState([]);
   const [locLoading, setLocLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [locationModalVisible, setlocationModalVisible] = useState(false);
   const [tournamentListVisible, setTournamentListVisible] = useState(false);
+  const [favoriteTournamentListVisible, setFavoriteTournamentListVisible] =
+    useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [selectedLocation, setSelectedLocation] = useState(null);
   const [mapReady, setMapReady] = useState(false);
   const [isFavorite, setIsFavorite] = useState(false);
   const [filteredTournaments, setFilteredTournaments] = useState([]);
-  const [isFiltered, setIsFiltered] = useState(false);
+  const [isFiltered, setIsFiltered] = useState(true);
   const [visible, setVisible] = useState(false);
   const [error, setError] = useState("");
   const showDialog = () => setVisible(true);
   const hideDialog = () => setVisible(false);
   const [weeklyChecked, setWeeklyChecked] = useState(false);
   const [oneTimeChecked, setOneTimeChecked] = useState(true);
+  const [settingsModalVisible, setSettingsModalVisible] = useState(true);
+  const [favoriteTournaments, setFavoriteTournaments] = useState([]);
   const [newTournament, setNewTournament] = useState({
     title: "",
     description: "",
@@ -64,12 +76,16 @@ const TournamentMapPage = () => {
   const mapRef = useRef(null);
   const navigation = useNavigation();
   const { location, loading } = useContext(MapContext);
+  const { showModal } = route.params || {};
 
   useFocusEffect(
     useCallback(() => {
+      if (showModal) {
+        setModalVisible(true);
+      }
       // Fetch user data when the screen is focused
       fetchTournamentLocations();
-    }, [])
+    }, [showModal])
   );
 
   const handleMarkerPress = async (location) => {
@@ -344,7 +360,7 @@ const TournamentMapPage = () => {
           <Text style={styles.tournamentTime}>{item.time}</Text>
           <Text style={styles.tournamentTitle}>{item.title}</Text>
           <Text style={styles.tournamentDescription}>{item.description}</Text>
-          <Text style={styles.tournamentLocation}>At {item.location}</Text>
+          <Text style={styles.tournamentDescription}>At {item.location}</Text>
         </View>
         <View style={styles.directionButtonContainer}>
           <Button
@@ -400,8 +416,104 @@ const TournamentMapPage = () => {
   }
   const { latitude, longitude } = location.coords;
 
+  const toggleShowTournaments = async () => {
+    setSettingsModalVisible(false);
+    setTimeout(() => {
+      handleFilterTournamentsByDistance();
+      setTournamentListVisible(true);
+    }, 500);
+    setTimeout(() => {
+      setSettingsModalVisible(true);
+    }, 300);
+  };
+
+  const fetchFavoriteTournaments = async (tournamentIds) => {
+    console.log("Fetching favorite tournament IDs:", tournamentIds);
+    try {
+      const tournaments = await Promise.all(
+        tournamentIds.map(async (id) => {
+          if (id) {
+            const idStr = String(id); // Ensure the ID is a string
+            try {
+              console.log(`Fetching favorite document for ID: ${idStr}`);
+              const tournamentDoc = await getDoc(
+                doc(db, "tournamentLocations", idStr)
+              );
+              if (tournamentDoc.exists()) {
+                return tournamentDoc.data();
+              } else {
+                console.log(`No favorite document found for ID: ${idStr}`);
+                // Delete that out of the list if it got deleted
+                const userRef = doc(db, "users", user.uid);
+                // Only call arrayRemove if id is not null or undefined
+                await updateDoc(userRef, {
+                  FavoriteTournamentsId: arrayRemove(id),
+                });
+
+                console.log(`Deleted favorite with ID: ${id}`);
+                return null;
+              }
+            } catch (error) {
+              console.error(
+                `Error fetching favorite document for ID: ${idStr}`,
+                error
+              );
+              return null;
+            }
+          } else {
+            console.log(
+              "Encountered an undefined or invalid favtournamentId:",
+              id
+            );
+            return null;
+          }
+        })
+      );
+      setFavoriteTournaments(
+        tournaments.filter((tournament) => tournament !== null)
+      );
+    } catch (error) {
+      console.error("Error fetching posted tournaments:", error);
+    }
+  };
+
+  const toggleShowFavorites = async () => {
+    try {
+      const userDoc = await getDoc(doc(db, "users", user.uid));
+      if (userDoc.exists()) {
+        const data = userDoc.data();
+        setSettingsModalVisible(false);
+        await fetchFavoriteTournaments(data.FavoriteTournamentsId);
+        setTimeout(() => {
+          setFavoriteTournamentListVisible(true);
+        }, 500);
+        setTimeout(() => {
+          setSettingsModalVisible(true);
+        }, 300);
+      }
+    } catch {
+      {
+        setSettingsModalVisible(false);
+        setError("Please login to post your own tournament.");
+        showDialog();
+        setTimeout(() => {
+          setSettingsModalVisible(true);
+        }, 300);
+        return;
+      }
+    }
+  };
+
   return (
     <View style={styles.container}>
+      {settingsModalVisible ? (
+        <HeaderButton
+          toggleShowTournaments={toggleShowTournaments}
+          toggleShowFavorites={toggleShowFavorites}
+        />
+      ) : (
+        <View></View>
+      )}
       {loading ? (
         // Show activity indicator while loading
         <View></View>
@@ -453,14 +565,6 @@ const TournamentMapPage = () => {
                 setErrorMessage("");
               }}
             />
-            <View style={styles.buttonContainer}>
-              <Button
-                title="Show Tournaments"
-                onPress={() => {
-                  setTournamentListVisible(true);
-                }}
-              />
-            </View>
             <Modal
               animationType="slide"
               transparent={true}
@@ -470,13 +574,21 @@ const TournamentMapPage = () => {
               }}
             >
               <View style={styles.modalView}>
+                {errorMessage && (
+                  <Text style={styles.errorMessage}>Error: {errorMessage}</Text>
+                )}
+                {successMessage && (
+                  <Text style={styles.successMessage}>
+                    Success: {successMessage}
+                  </Text>
+                )}
                 <Text style={styles.modalTextViewHeader}>
                   Add your pool place:
                 </Text>
                 <TextInput
                   style={styles.input}
-                  placeholder="Title"
-                  placeholderTextColor="#333"
+                  placeholder="Title*"
+                  placeholderTextColor="lightgrey"
                   value={newTournament.title}
                   onChangeText={(text) =>
                     setNewTournament({ ...newTournament, title: text })
@@ -484,10 +596,10 @@ const TournamentMapPage = () => {
                 />
                 <TextInput
                   style={[styles.input, { padding: 10 }]}
-                  placeholder="Description"
+                  placeholder="Description*"
                   multiline
                   numberOfLines={4}
-                  placeholderTextColor="#333"
+                  placeholderTextColor="lightgrey"
                   value={newTournament.description}
                   onChangeText={(text) =>
                     setNewTournament({ ...newTournament, description: text })
@@ -495,8 +607,8 @@ const TournamentMapPage = () => {
                 />
                 <TextInput
                   style={styles.input}
-                  placeholder="Date & Time"
-                  placeholderTextColor="#333"
+                  placeholder="Date & Time*"
+                  placeholderTextColor="lightgrey"
                   value={newTournament.time}
                   onChangeText={(text) =>
                     setNewTournament({ ...newTournament, time: text })
@@ -512,7 +624,7 @@ const TournamentMapPage = () => {
                   <View
                     style={{
                       borderWidth: 1,
-                      borderColor: "gray",
+                      borderColor: "white",
                       padding: 0.1,
                       marginRight: 6,
                     }}
@@ -525,13 +637,18 @@ const TournamentMapPage = () => {
                       }}
                     />
                   </View>
-                  <Text style={[styles.label, (style = { paddingRight: 6 })]}>
+                  <Text
+                    style={[
+                      styles.label,
+                      (style = { paddingRight: 6, color: "lightgrey" }),
+                    ]}
+                  >
                     One Time Event
                   </Text>
                   <View
                     style={{
                       borderWidth: 1,
-                      borderColor: "gray",
+                      borderColor: "white",
                       padding: 0.1,
                       marginRight: 6,
                     }}
@@ -544,13 +661,17 @@ const TournamentMapPage = () => {
                       }}
                     />
                   </View>
-                  <Text style={styles.label}>Weekly Event</Text>
+                  <Text
+                    style={[styles.label, (style = { color: "lightgrey" })]}
+                  >
+                    Weekly Event
+                  </Text>
                 </View>
 
                 <TextInput
                   style={styles.input}
-                  placeholder="Address"
-                  placeholderTextColor="#333"
+                  placeholder="Address*"
+                  placeholderTextColor="lightgrey"
                   value={newTournament.location}
                   onChangeText={(text) =>
                     setNewTournament({ ...newTournament, location: text })
@@ -559,7 +680,7 @@ const TournamentMapPage = () => {
                 <TextInput
                   style={styles.input}
                   placeholder="Facebook link (optional)"
-                  placeholderTextColor="#333"
+                  placeholderTextColor="lightgrey"
                   value={newTournament.faceBookLink}
                   onChangeText={(text) =>
                     setNewTournament({ ...newTournament, faceBookLink: text })
@@ -575,17 +696,10 @@ const TournamentMapPage = () => {
                     />
                     <Button
                       title="Cancel"
+                      color="red"
                       onPress={() => setModalVisible(false)}
                     />
                   </>
-                )}
-                {errorMessage && (
-                  <Text style={styles.errorMessage}>Error: {errorMessage}</Text>
-                )}
-                {successMessage && (
-                  <Text style={styles.successMessage}>
-                    Success: {successMessage}
-                  </Text>
                 )}
               </View>
             </Modal>
@@ -677,29 +791,43 @@ const TournamentMapPage = () => {
               onRequestClose={() => setTournamentListVisible(false)}
             >
               <View style={styles.modalView}>
-                {isFiltered ? (
-                  <Button
-                    title="Unfilter"
-                    onPress={handleFilterTournamentsByDistance}
-                  ></Button>
-                ) : (
-                  <View>
-                    <Button
-                      title="Filter within 50 miles"
-                      onPress={handleFilterTournamentsByDistance}
-                    />
-                  </View>
-                )}
-                <Text style={styles.modalTextViewHeader}>Tournament List</Text>
+                <Text style={styles.modalTextViewHeader}>
+                  Tournaments Near You
+                </Text>
                 <FlatList
                   style={styles.flatListView}
-                  data={isFiltered ? filteredTournaments : tournamentLocations}
+                  data={filteredTournaments}
                   renderItem={renderTournamentItem}
                   keyExtractor={(item) => item.id.toString()}
                 />
                 <Button
+                  color="red"
                   title="Close"
                   onPress={() => setTournamentListVisible(false)}
+                />
+              </View>
+            </Modal>
+            <Modal
+              animationType="slide"
+              transparent={true}
+              visible={favoriteTournamentListVisible}
+              onRequestClose={() => setFavoriteTournamentListVisible(false)}
+            >
+              <View style={styles.modalView}>
+                <Text style={styles.modalTextViewHeader}>Your Favorites</Text>
+                <FlatList
+                  style={styles.flatListView}
+                  data={favoriteTournaments}
+                  renderItem={renderTournamentItem}
+                  keyExtractor={(item) => item.id.toString()}
+                />
+                <Text style={{ color: "white" }}>
+                  Unfavorite in the profile tab
+                </Text>
+                <Button
+                  color="red"
+                  title="Close"
+                  onPress={() => setFavoriteTournamentListVisible(false)}
                 />
               </View>
             </Modal>
@@ -751,13 +879,13 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     marginRight: 50,
-    backgroundColor: "lightgrey",
+    backgroundColor: "#3a3f44",
     borderRadius: 10,
   },
   modalView: {
     margin: 20,
     marginTop: 70,
-    backgroundColor: "white",
+    backgroundColor: "#3a3f44",
     borderRadius: 20,
     padding: 35,
     paddingBottom: 7,
@@ -776,7 +904,7 @@ const styles = StyleSheet.create({
   modalContent: {
     width: 250,
     padding: 10,
-    backgroundColor: "white",
+    backgroundColor: "#3a3f44",
     borderRadius: 10,
     alignItems: "center",
   },
@@ -785,16 +913,19 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     marginBottom: 10,
     textAlign: "center",
+    color: "white",
   },
   modalDescription: {
     fontSize: 15,
     marginBottom: 8,
     textAlign: "center",
+    color: "white",
   },
   modalLocation: {
     fontSize: 18,
     marginBottom: 8,
     textAlign: "center",
+    color: "white",
   },
   getDirectionsButton: {
     paddingBottom: 15,
@@ -803,6 +934,7 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     fontSize: 24,
     marginBottom: 15,
+    color: "white",
   },
   favoriteIcon: {
     position: "absolute",
@@ -812,11 +944,12 @@ const styles = StyleSheet.create({
   },
   input: {
     height: 40,
-    borderColor: "gray",
+    borderColor: "white",
     borderWidth: 1,
     marginBottom: 12,
     width: "100%",
     paddingLeft: 8,
+    color: "white",
   },
   callout: {
     flex: 1,
@@ -826,6 +959,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontWeight: "bold",
+    color: "black",
   },
   titleCallout: {
     backgroundColor: "#00a9ff",
@@ -841,7 +975,7 @@ const styles = StyleSheet.create({
   tournamentItem: {
     flex: 1,
     flexDirection: "row",
-    backgroundColor: "white",
+    backgroundColor: "#3a3f44",
     borderBottomWidth: 1,
     borderBottomColor: "#ccc",
     paddingVertical: 10,
@@ -850,6 +984,7 @@ const styles = StyleSheet.create({
   tournamentInfo: {
     flex: 1,
     paddingRight: 10,
+    color: "white",
   },
   directionButtonContainer: {
     flex: 1,
@@ -859,28 +994,30 @@ const styles = StyleSheet.create({
   },
   tournamentTime: {
     fontWeight: "bold",
-    color: "#333",
+    color: "white",
   },
 
   tournamentTitle: {
     fontWeight: "bold",
     fontSize: 16,
+    color: "white",
   },
   tournamentDescription: {
     fontSize: 14,
-    marginTop: 5,
+
     marginBottom: 5,
+    color: "white",
   },
   tournamentCreatedBy: {
     fontStyle: "italic",
-    color: "#555",
+    color: "white",
   },
   errorModalView: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
     margin: 20,
-    backgroundColor: "white",
+    backgroundColor: "#3a3f44",
     borderRadius: 20,
     padding: 35,
     shadowColor: "#000",
@@ -899,11 +1036,11 @@ const styles = StyleSheet.create({
   },
   errorMessage: {
     color: "red",
-    marginTop: 10,
+    marginBottom: 10,
   },
   successMessage: {
     color: "green",
-    marginTop: 10,
+    marginBottom: 10,
   },
 });
 

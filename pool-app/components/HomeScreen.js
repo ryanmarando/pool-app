@@ -9,6 +9,11 @@ import PostTourneyNearYouImage from "../post-tourney-image.jpg";
 
 const HomeScreen = () => {
   const navigation = useNavigation();
+
+  const handlePressCreateTournament = () => {
+    navigation.navigate("FullMap", { showModal: true });
+  };
+
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollView}>
@@ -64,10 +69,7 @@ const HomeScreen = () => {
             </Card.Content>
 
             <Card.Actions>
-              <Button
-                mode="contained"
-                onPress={() => navigation.navigate("FullMap")}
-              >
+              <Button mode="contained" onPress={handlePressCreateTournament}>
                 Create
               </Button>
             </Card.Actions>

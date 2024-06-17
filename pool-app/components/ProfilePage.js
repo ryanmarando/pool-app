@@ -26,7 +26,6 @@ const ProfileScreen = ({ navigation }) => {
   const [poolTeams, setPoolTeams] = useState([]);
   const [postedTournaments, setPostedTournaments] = useState([]);
   const [favoriteTournaments, setFavoriteTournaments] = useState([]);
-
   const [isLoading, setIsLoading] = useState(false);
   const [isFavorite, setIsFavorite] = useState(true);
 
