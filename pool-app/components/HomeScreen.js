@@ -1,16 +1,32 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { ScrollView, StyleSheet, View, Text, Image, Modal } from "react-native";
-import { Card, Title, Paragraph, Button } from "react-native-paper";
+import {
+  Card,
+  Title,
+  Paragraph,
+  Button,
+  Dialog,
+  Portal,
+} from "react-native-paper";
 import { useNavigation } from "@react-navigation/native";
 import HeroImage from "../billiards-logo.png";
-import FindTeamImage from "../pool-find-team-image.jpg";
-import FindTourneyNearYouImage from "../find-tourney-near-you.jpg";
-import PostTourneyNearYouImage from "../post-tourney-image.jpg";
+import { getAuth } from "firebase/auth";
 
 const HomeScreen = () => {
   const navigation = useNavigation();
+  const auth = getAuth();
+  const user = auth.currentUser;
+  const [visible, setVisible] = useState(false);
+  const [error, setError] = useState("");
+  const showDialog = () => setVisible(true);
+  const hideDialog = () => setVisible(false);
 
   const handlePressCreateTournament = () => {
+    if (!user) {
+      setError("Please login to post your own tournament");
+      showDialog();
+      return;
+    }
     navigation.navigate("FullMap", { showModal: true });
   };
 
@@ -76,6 +92,28 @@ const HomeScreen = () => {
           </Card>
         </View>
       </ScrollView>
+      <Portal>
+        <Dialog visible={visible} onDismiss={hideDialog}>
+          <Dialog.Title>Error</Dialog.Title>
+          <Dialog.Content>
+            <Paragraph>{error}</Paragraph>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button title="Ok" onPress={hideDialog}>
+              OK
+            </Button>
+            <Button
+              title="Sign In"
+              onPress={() => {
+                hideDialog();
+                navigation.navigate("Profile");
+              }}
+            >
+              Sign In
+            </Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
     </View>
   );
 };

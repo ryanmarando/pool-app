@@ -161,6 +161,12 @@ const TournamentMapPage = ({ route }) => {
   };
 
   const toggleFavorite = async () => {
+    if (!user) {
+      setError("Please login to favorite this post.");
+      showDialog();
+      setlocationModalVisible(false);
+      return;
+    }
     setIsFavorite(!isFavorite);
     if (!isFavorite) {
       try {
@@ -494,7 +500,7 @@ const TournamentMapPage = ({ route }) => {
     } catch {
       {
         setSettingsModalVisible(false);
-        setError("Please login to post your own tournament.");
+        setError("Please login to show your favorite tournaments.");
         showDialog();
         setTimeout(() => {
           setSettingsModalVisible(true);
@@ -838,7 +844,7 @@ const TournamentMapPage = ({ route }) => {
                   <Paragraph>{error}</Paragraph>
                 </Dialog.Content>
                 <Dialog.Actions>
-                  <Button title="Close" onPress={hideDialog}>
+                  <Button title="Ok" onPress={hideDialog}>
                     OK
                   </Button>
                   <Button
