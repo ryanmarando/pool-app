@@ -589,7 +589,7 @@ const TournamentMapPage = ({ route }) => {
                   </Text>
                 )}
                 <Text style={styles.modalTextViewHeader}>
-                  Add your pool place:
+                  Add your pool tournament:
                 </Text>
                 <TextInput
                   style={styles.input}

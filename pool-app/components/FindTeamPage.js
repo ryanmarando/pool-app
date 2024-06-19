@@ -10,6 +10,7 @@ import {
   Modal,
   TextInput,
   ActivityIndicator,
+  TouchableOpacity,
 } from "react-native";
 import { Dialog, Portal, Paragraph } from "react-native-paper";
 import HeroImage from "../billiards-logo.png";
@@ -18,6 +19,7 @@ import { doc, setDoc, collection, getDocs, getDoc } from "firebase/firestore";
 import { db } from "../firebaseConfig";
 import { getAuth } from "firebase/auth";
 import { useNavigation } from "@react-navigation/native";
+import ErrorDialogPortal from "../components/ErrorDialogPortal";
 
 const FindTeamsPage = () => {
   const [modalVisible, setModalVisible] = useState(false);
@@ -37,12 +39,21 @@ const FindTeamsPage = () => {
   const [error, setError] = useState("");
   const showDialog = () => setVisible(true);
   const hideDialog = () => setVisible(false);
+  const [errorTitle, setErrorTitle] = useState("Error");
   const navigation = useNavigation();
 
   useEffect(() => {
     // Fetch tournament locations from Firestore when component mounts
     fetchPoolTeams();
   }, []);
+
+  const successMessagePopUp = () => {
+    setErrorTitle("Success");
+    setError(
+      "The poster has be notified of your interest and may be in contact if they see fit."
+    );
+    showDialog();
+  };
 
   const fetchPoolTeams = async () => {
     setLoading(true);
@@ -145,7 +156,11 @@ const FindTeamsPage = () => {
         Skill Level Wanted: {item.skillLevel}
       </Text>
       <Text style={styles.availability}>Availability: {item.availability}</Text>
-      <Text style={styles.joinButton}>Join Team</Text>
+      <TouchableOpacity>
+        <Text style={styles.joinButton} onPress={successMessagePopUp}>
+          Join Team
+        </Text>
+      </TouchableOpacity>
     </View>
   );
 
@@ -218,27 +233,12 @@ const FindTeamsPage = () => {
       <View style={styles.buttonView}>
         <Button title="Post Your Own Team" onPress={handlePostTeamButton} />
       </View>
-      <Portal>
-        <Dialog visible={visible} onDismiss={hideDialog}>
-          <Dialog.Title>Error</Dialog.Title>
-          <Dialog.Content>
-            <Paragraph>{error}</Paragraph>
-          </Dialog.Content>
-          <Dialog.Actions>
-            <Button title="Ok" onPress={hideDialog}>
-              Ok
-            </Button>
-            <Button
-              title="Sign In"
-              mode="contained"
-              onPress={() => {
-                hideDialog();
-                navigation.navigate("Profile");
-              }}
-            ></Button>
-          </Dialog.Actions>
-        </Dialog>
-      </Portal>
+      <ErrorDialogPortal
+        title={errorTitle}
+        visible={visible}
+        error={error}
+        hideDialog={hideDialog}
+      />
     </View>
   );
 };

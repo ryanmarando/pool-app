@@ -3,13 +3,13 @@ import { Dialog, Portal, Paragraph } from "react-native-paper";
 import { useNavigation } from "@react-navigation/native";
 import { Button } from "react-native";
 
-const ErrorDialogPortal = ({ error, visible, hideDialog }) => {
+const ErrorDialogPortal = ({ title, error, visible, hideDialog }) => {
   const navigation = useNavigation();
 
   return (
     <Portal>
       <Dialog visible={visible} onDismiss={hideDialog}>
-        <Dialog.Title>Error</Dialog.Title>
+        <Dialog.Title>{title}</Dialog.Title>
         <Dialog.Content>
           <Paragraph>{error}</Paragraph>
         </Dialog.Content>

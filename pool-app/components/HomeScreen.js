@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useCallback, useState } from "react";
 import { ScrollView, StyleSheet, View, Text, Image, Modal } from "react-native";
 import {
   Card,
@@ -8,9 +8,10 @@ import {
   Dialog,
   Portal,
 } from "react-native-paper";
-import { useNavigation } from "@react-navigation/native";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import HeroImage from "../billiards-logo.png";
 import { getAuth } from "firebase/auth";
+import ErrorDialogPortal from "../components/ErrorDialogPortal";
 
 const HomeScreen = () => {
   const navigation = useNavigation();
@@ -20,9 +21,17 @@ const HomeScreen = () => {
   const [error, setError] = useState("");
   const showDialog = () => setVisible(true);
   const hideDialog = () => setVisible(false);
+  const errorTitle = "Error";
+
+  useFocusEffect(
+    useCallback(() => {
+      const user = auth.currentUser;
+      console.log("updated user");
+    }, [])
+  );
 
   const handlePressCreateTournament = () => {
-    if (!user) {
+    if (!user || user == null) {
       setError("Please login to post your own tournament");
       showDialog();
       return;
@@ -92,28 +101,12 @@ const HomeScreen = () => {
           </Card>
         </View>
       </ScrollView>
-      <Portal>
-        <Dialog visible={visible} onDismiss={hideDialog}>
-          <Dialog.Title>Error</Dialog.Title>
-          <Dialog.Content>
-            <Paragraph>{error}</Paragraph>
-          </Dialog.Content>
-          <Dialog.Actions>
-            <Button title="Ok" onPress={hideDialog}>
-              OK
-            </Button>
-            <Button
-              title="Sign In"
-              onPress={() => {
-                hideDialog();
-                navigation.navigate("Profile");
-              }}
-            >
-              Sign In
-            </Button>
-          </Dialog.Actions>
-        </Dialog>
-      </Portal>
+      <ErrorDialogPortal
+        title={errorTitle}
+        visible={visible}
+        error={error}
+        hideDialog={hideDialog}
+      />
     </View>
   );
 };
