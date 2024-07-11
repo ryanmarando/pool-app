@@ -309,7 +309,9 @@ const ProfileScreen = ({ navigation }) => {
           <View style={styles.teamInfo}>
             <Text style={styles.teamName}>{item.title}</Text>
             <Text>Description: {item.description}</Text>
-            <Text>{item.time}</Text>
+            <Text>
+              {item.date} at {item.time}
+            </Text>
             <Text>{item.location}</Text>
           </View>
           <View style={styles.deleteButtonContainer}>
@@ -333,7 +335,9 @@ const ProfileScreen = ({ navigation }) => {
           <View style={styles.teamInfo}>
             <Text style={styles.teamName}>{item.title}</Text>
             <Text>Description: {item.description}</Text>
-            <Text>{item.time}</Text>
+            <Text>
+              {item.date} at {item.time}
+            </Text>
             <Text>{item.location}</Text>
           </View>
           <View style={styles.deleteButtonContainer}>

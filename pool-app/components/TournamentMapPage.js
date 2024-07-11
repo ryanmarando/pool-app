@@ -38,6 +38,7 @@ import { useNavigation } from "@react-navigation/native";
 import { MapContext } from "./MapContext";
 import { openLink } from "../functions/openLink";
 import HeaderButton from "../components/HeaderButton";
+import DateTimePicker from "@react-native-community/datetimepicker";
 
 const TournamentMapPage = ({ route }) => {
   const [tournamentLocations, setTournamentLocations] = useState([]);
@@ -67,6 +68,7 @@ const TournamentMapPage = ({ route }) => {
     description: "",
     location: "",
     time: "",
+    date: "",
     weeklyChecked: weeklyChecked,
     oneTimeChecked: oneTimeChecked,
     faceBookLink: "",
@@ -77,6 +79,38 @@ const TournamentMapPage = ({ route }) => {
   const navigation = useNavigation();
   const { location, loading } = useContext(MapContext);
   const { showModal } = route.params || {};
+  const [date, setDate] = useState(new Date());
+  const [time, setTime] = useState(new Date());
+  const [showPicker, setShowPicker] = useState({ date: false, time: false });
+
+  const onChangeDate = (event, selectedDate) => {
+    const currentDate = selectedDate || date;
+    setShowPicker({ ...showPicker, date: false });
+    setDate(currentDate);
+    setNewTournament({ ...newTournament, date: currentDate.toDateString() });
+  };
+
+  const onChangeTime = (event, selectedTime) => {
+    const currentTime = selectedTime || time;
+    setShowPicker({ ...showPicker, time: false });
+    setTime(currentTime);
+    setNewTournament({
+      ...newTournament,
+      time: currentTime.toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
+      }),
+    });
+  };
+
+  const handleShowDatePicker = () => {
+    setShowPicker({ date: true, time: false });
+  };
+
+  const handleShowTimePicker = () => {
+    setShowPicker({ date: false, time: true });
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -236,8 +270,9 @@ const TournamentMapPage = ({ route }) => {
     }
     setLocLoading(true);
     try {
+      const encodedAddress = encodeURIComponent(newTournament.location);
       const response = await axios.get(
-        `https://maps.googleapis.com/maps/api/geocode/json?address=${newTournament.location}&key=AIzaSyAikQ-XwdscIumcQZH4tj5lNLGl7aI3AZc`
+        `https://maps.googleapis.com/maps/api/geocode/json?address=${encodedAddress}&key=AIzaSyDlTelzP2AlMephGGLm4BEWgInbEwlkrBM`
       );
 
       const { results } = response.data;
@@ -252,6 +287,7 @@ const TournamentMapPage = ({ route }) => {
           longitude: lng,
           location: newTournament.location,
           time: newTournament.time,
+          date: newTournament.date,
           weeklyChecked: weeklyChecked,
           oneTimeChecked: oneTimeChecked,
           faceBookLink: newTournament.faceBookLink,
@@ -280,7 +316,7 @@ const TournamentMapPage = ({ route }) => {
         setWeeklyChecked(false);
         setOneTimeChecked(true);
       } else {
-        console.error("Location not found");
+        console.error("Location not found", error);
         setErrorMessage("Location not found");
         setTimeout(() => setErrorMessage(""), 5000);
       }
@@ -363,7 +399,9 @@ const TournamentMapPage = ({ route }) => {
     return (
       <View style={styles.tournamentItem}>
         <View style={styles.tournamentInfo}>
-          <Text style={styles.tournamentTime}>{item.time}</Text>
+          <Text style={styles.tournamentTime}>
+            {item.date} at {item.time}
+          </Text>
           <Text style={styles.tournamentTitle}>{item.title}</Text>
           <Text style={styles.tournamentDescription}>{item.description}</Text>
           <Text style={styles.tournamentDescription}>At {item.location}</Text>
@@ -611,15 +649,49 @@ const TournamentMapPage = ({ route }) => {
                     setNewTournament({ ...newTournament, description: text })
                   }
                 />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Date & Time*"
-                  placeholderTextColor="lightgrey"
-                  value={newTournament.time}
-                  onChangeText={(text) =>
-                    setNewTournament({ ...newTournament, time: text })
-                  }
-                />
+                <View style={styles.containerDateTime}>
+                  <View style={styles.buttonContainerDateTime}>
+                    <Button
+                      onPress={handleShowDatePicker}
+                      title="Select Date"
+                    />
+                    <Button
+                      onPress={handleShowTimePicker}
+                      title="Select Time"
+                    />
+                  </View>
+                  <View style={styles.textContainer}>
+                    <Text
+                      style={[
+                        styles.input,
+                        { padding: 10, alignItems: "center" },
+                      ]}
+                    >
+                      Date: {newTournament.date}
+                    </Text>
+                    <Text style={[styles.input, { padding: 10 }]}>
+                      Time: {newTournament.time}
+                    </Text>
+                  </View>
+                  {showPicker.date && (
+                    <DateTimePicker
+                      value={date}
+                      minimumDate={new Date()}
+                      mode="date"
+                      display="default"
+                      onChange={onChangeDate}
+                    />
+                  )}
+                  {showPicker.time && (
+                    <DateTimePicker
+                      value={time}
+                      minimumDate={new Date()}
+                      mode="time"
+                      display="default"
+                      onChange={onChangeTime}
+                    />
+                  )}
+                </View>
                 <View
                   style={{
                     flexDirection: "row",
@@ -744,13 +816,23 @@ const TournamentMapPage = ({ route }) => {
                     </Text>
 
                     {selectedLocation.oneTimeChecked ? (
-                      <Text style={styles.modalLocation}>
-                        {selectedLocation.time}
-                      </Text>
+                      <View>
+                        <Text style={styles.modalLocation}>
+                          {selectedLocation.date}
+                        </Text>
+                        <Text style={styles.modalLocation}>
+                          At {selectedLocation.time}
+                        </Text>
+                      </View>
                     ) : (
-                      <Text style={styles.modalLocation}>
-                        Every week: {selectedLocation.time}
-                      </Text>
+                      <View>
+                        <Text style={styles.modalLocation}>
+                          Every week starting: {selectedLocation.date}
+                        </Text>
+                        <Text style={styles.modalLocation}>
+                          At {selectedLocation.time}
+                        </Text>
+                      </View>
                     )}
 
                     <View>
@@ -1047,6 +1129,19 @@ const styles = StyleSheet.create({
   successMessage: {
     color: "green",
     marginBottom: 10,
+  },
+  containerDateTime: {
+    paddingTop: 4,
+    paddingBottom: 18,
+  },
+  buttonContainerDateTime: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginVertical: 16,
+  },
+  textContainer: {
+    justifyContent: "center",
+    alignItems: "center",
   },
 });
 
