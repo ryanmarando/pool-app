@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useContext } from "react";
+import React, { useState, useCallback, useRef, useContext, useEffect } from "react";
 import {
   View,
   StyleSheet,
@@ -10,6 +10,7 @@ import {
   FlatList,
   TouchableOpacity,
   TouchableWithoutFeedback,
+  ScrollView
 } from "react-native";
 import MapView, { Marker } from "react-native-maps";
 import {
@@ -39,6 +40,7 @@ import { MapContext } from "./MapContext";
 import { openLink } from "../functions/openLink";
 import HeaderButton from "../components/HeaderButton";
 import DateTimePicker from "@react-native-community/datetimepicker";
+import { Timestamp, deleteDoc } from 'firebase/firestore';
 
 const TournamentMapPage = ({ route }) => {
   const [tournamentLocations, setTournamentLocations] = useState([]);
@@ -67,8 +69,7 @@ const TournamentMapPage = ({ route }) => {
     title: "",
     description: "",
     location: "",
-    time: "",
-    date: "",
+    dateTime: null,
     weeklyChecked: weeklyChecked,
     oneTimeChecked: oneTimeChecked,
     faceBookLink: "",
@@ -81,29 +82,82 @@ const TournamentMapPage = ({ route }) => {
   const { showModal } = route.params || {};
   const [date, setDate] = useState(new Date());
   const [time, setTime] = useState(new Date());
-  const [showPicker, setShowPicker] = useState({ date: false, time: false });
+  const [showPicker, setShowPicker] = useState({ date: true, time: true });
+
+  useEffect(() => {
+    deletePastEvents();
+  }, []); // Empty dependency array to run once on component mount
+
+  const deletePastEvents = async () => {
+    const now = new Date(); // Current date and time
+    const querySnapshot = await getDocs(collection(db, 'tournamentLocations'));
+  
+    querySnapshot.forEach(async (docSnapshot) => {
+      const eventData = docSnapshot.data();
+      const eventDateTime = eventData.dateTime?.toDate(); // Convert Firestore Timestamp to JS Date
+      
+      if (eventData.oneTimeChecked && eventDateTime < now) {
+        // If event date and time is in the past, delete it
+        await deleteDoc(doc(db, 'tournamentLocations', docSnapshot.id));
+        console.log(`Deleted event: ${docSnapshot.id}`);
+        fetchTournamentLocations();
+      }
+      else if (eventData.weeklyChecked && eventDateTime < now) {
+        console.log("weekly update")
+        const eventDateTime = eventData.dateTime?.toDate();
+        const newDate = new Date(eventDateTime);
+        newDate.setDate(newDate.getDate() + 7);
+        // Save the date as a Firestore Timestamp
+        const timestamp = Timestamp.fromDate(newDate);
+        const updatedTournamentData = {
+          dateTime: timestamp,
+          // Add any other fields you want to update
+      };
+        const tournamentRef = doc(db, "tournamentLocations", String(eventData.id)); // Replace with your collection name
+        await updateDoc(tournamentRef, updatedTournamentData);
+        console.log("Updated weekly event")
+        fetchTournamentLocations();
+      }
+    });
+  };
 
   const onChangeDate = (event, selectedDate) => {
     const currentDate = selectedDate || date;
     setShowPicker({ ...showPicker, date: false });
+  
+    // Update the date state
     setDate(currentDate);
-    setNewTournament({ ...newTournament, date: currentDate.toDateString() });
+  
+    // Combine with the current time to create a new Date object
+    const combinedDateTime = new Date(currentDate);
+    combinedDateTime.setHours(time.getHours());
+    combinedDateTime.setMinutes(time.getMinutes());
+  
+    // Save the combined date and time as a Firestore Timestamp
+    const timestamp = Timestamp.fromDate(combinedDateTime);
+    //console.log('Combined DateTime:', combinedDateTime, 'Timestamp:', timestamp); // Debugging log
+    setNewTournament({ ...newTournament, dateTime: timestamp });
   };
-
+  
   const onChangeTime = (event, selectedTime) => {
     const currentTime = selectedTime || time;
     setShowPicker({ ...showPicker, time: false });
+  
+    // Update the time state
     setTime(currentTime);
-    setNewTournament({
-      ...newTournament,
-      time: currentTime.toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: true,
-      }),
-    });
+  
+    // Combine with the current date to create a new Date object
+    const combinedDateTime = new Date(date);
+    combinedDateTime.setHours(currentTime.getHours());
+    combinedDateTime.setMinutes(currentTime.getMinutes());
+  
+    // Save the combined date and time as a Firestore Timestamp
+    const timestamp = Timestamp.fromDate(combinedDateTime);
+    //console.log('Combined DateTime:', combinedDateTime, 'Timestamp:', timestamp); // Debugging log
+    setNewTournament({ ...newTournament, dateTime: timestamp });
   };
-
+  
+  
   const handleShowDatePicker = () => {
     setShowPicker({ date: true, time: false });
   };
@@ -256,12 +310,16 @@ const TournamentMapPage = ({ route }) => {
     if (
       !newTournament.title ||
       !newTournament.description ||
-      !newTournament.location ||
-      !newTournament.time
+      !newTournament.location
     ) {
       setErrorMessage("More fields are required");
       setTimeout(() => setErrorMessage(""), 5000);
       return;
+    }
+    else if (!newTournament.dateTime) {
+      setErrorMessage("Please enter your date and time");
+      setTimeout(() => setErrorMessage(""), 5000);
+      return
     }
     if (!weeklyChecked && !oneTimeChecked) {
       setErrorMessage("Please choose if this is weekly or a one time event");
@@ -286,8 +344,7 @@ const TournamentMapPage = ({ route }) => {
           latitude: lat,
           longitude: lng,
           location: newTournament.location,
-          time: newTournament.time,
-          date: newTournament.date,
+          dateTime: newTournament.dateTime,
           weeklyChecked: weeklyChecked,
           oneTimeChecked: oneTimeChecked,
           faceBookLink: newTournament.faceBookLink,
@@ -310,7 +367,6 @@ const TournamentMapPage = ({ route }) => {
           title: "",
           description: "",
           location: "",
-          time: "",
           faceBookLink: "",
         });
         setWeeklyChecked(false);
@@ -396,11 +452,19 @@ const TournamentMapPage = ({ route }) => {
   };
 
   const renderTournamentItem = ({ item }) => {
+    const dateTime = item.dateTime?.toDate ? item.dateTime.toDate() : new Date(item.dateTime);
+
     return (
       <View style={styles.tournamentItem}>
         <View style={styles.tournamentInfo}>
           <Text style={styles.tournamentTime}>
-            {item.date} at {item.time}
+          {dateTime instanceof Date && !isNaN(dateTime) ? (
+                <Text style={styles.tournamentTime}>
+                    {dateTime.toLocaleDateString()} at {dateTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}
+                </Text>
+            ) : (
+                <Text style={styles.tournamentTime}>No end date</Text>
+            )}
           </Text>
           <Text style={styles.tournamentTitle}>{item.title}</Text>
           <Text style={styles.tournamentDescription}>{item.description}</Text>
@@ -548,6 +612,25 @@ const TournamentMapPage = ({ route }) => {
     }
   };
 
+  const ModalTimeConvertComponent = ({ selectedLocation }) => {
+    // Check if selectedLocation is defined and has dateTime
+    const dateTime = selectedLocation?.dateTime 
+        ? selectedLocation.dateTime.toDate() // Convert Firestore timestamp to Date
+        : null;
+
+    return (
+        <View>
+             {dateTime instanceof Date && !isNaN(dateTime) ? (
+                <Text style={styles.tournamentTime}>
+                    {dateTime.toLocaleDateString()} at {dateTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}
+                </Text>
+            ) : (
+                <Text style={styles.tournamentTime}>No end date</Text>
+            )}
+        </View>
+    );
+};
+
   return (
     <View style={styles.container}>
       {settingsModalVisible ? (
@@ -626,9 +709,14 @@ const TournamentMapPage = ({ route }) => {
                     Success: {successMessage}
                   </Text>
                 )}
+                
                 <Text style={styles.modalTextViewHeader}>
                   Add your pool tournament:
                 </Text>
+                <ScrollView 
+                style={styles.scrollContainer} 
+                contentContainerStyle={styles.scrollContentContainer}
+                >
                 <TextInput
                   style={styles.input}
                   placeholder="Title*"
@@ -649,49 +737,34 @@ const TournamentMapPage = ({ route }) => {
                     setNewTournament({ ...newTournament, description: text })
                   }
                 />
-                <View style={styles.containerDateTime}>
-                  <View style={styles.buttonContainerDateTime}>
-                    <Button
-                      onPress={handleShowDatePicker}
-                      title="Select Date"
-                    />
-                    <Button
-                      onPress={handleShowTimePicker}
-                      title="Select Time"
-                    />
-                  </View>
-                  <View style={styles.textContainer}>
-                    <Text
-                      style={[
-                        styles.input,
-                        { padding: 10, alignItems: "center" },
-                      ]}
-                    >
-                      Date: {newTournament.date}
-                    </Text>
-                    <Text style={[styles.input, { padding: 10 }]}>
-                      Time: {newTournament.time}
-                    </Text>
-                  </View>
-                  {showPicker.date && (
-                    <DateTimePicker
-                      value={date}
-                      minimumDate={new Date()}
-                      mode="date"
-                      display="default"
-                      onChange={onChangeDate}
-                    />
-                  )}
-                  {showPicker.time && (
-                    <DateTimePicker
-                      value={time}
-                      minimumDate={new Date()}
-                      mode="time"
-                      display="default"
-                      onChange={onChangeTime}
-                    />
-                  )}
-                </View>
+            
+            <View style={[styles.textContainer, { flexDirection: "row", alignItems: "center", flexWrap: 'wrap', marginVertical: 10 }]}>
+    
+    <Text style={{ padding: 10, textAlign: "center", color: "white" }}>
+        Select Date:  {/* Show the actual selected date */}
+    </Text>
+    <DateTimePicker
+        value={date}
+        minimumDate={new Date()}
+        mode="date"
+        display="default"
+        onChange={onChangeDate}
+    />
+
+    <View style={[styles.textContainer, { flexDirection: "row", alignItems: "center", marginBottom: 10 }]}>
+        <Text style={{ padding: 10, textAlign: "center", color: "white" }}>
+            Select Time: {/* Show the actual selected time */}
+        </Text>
+    </View>
+    <DateTimePicker
+        value={time}
+        minimumDate={new Date()}
+        mode="time"
+        display="default"
+        onChange={onChangeTime}
+    />
+</View>
+     
                 <View
                   style={{
                     flexDirection: "row",
@@ -716,13 +789,18 @@ const TournamentMapPage = ({ route }) => {
                     />
                   </View>
                   <Text
-                    style={[
-                      styles.label,
-                      (style = { paddingRight: 6, color: "lightgrey" }),
-                    ]}
-                  >
-                    One Time Event
-                  </Text>
+  style={[
+    styles.label,
+    {
+      paddingRight: 6,
+      color: "lightgrey",
+      flexWrap: "wrap",     // Allow text to wrap
+      width: 100,           // Adjust width to trigger wrapping
+    },
+  ]}
+>
+  One Time Event
+</Text>
                   <View
                     style={{
                       borderWidth: 1,
@@ -740,10 +818,17 @@ const TournamentMapPage = ({ route }) => {
                     />
                   </View>
                   <Text
-                    style={[styles.label, (style = { color: "lightgrey" })]}
-                  >
-                    Weekly Event
-                  </Text>
+  style={[
+    styles.label,
+    {
+      paddingRight: 6,
+      color: "lightgrey",
+      flexWrap: "wrap",     // Allow text to wrap
+      width: 70,           // Adjust width to trigger wrapping
+    },
+  ]}
+>Weekly Event
+</Text>
                 </View>
 
                 <TextInput
@@ -764,6 +849,7 @@ const TournamentMapPage = ({ route }) => {
                     setNewTournament({ ...newTournament, faceBookLink: text })
                   }
                 />
+                </ScrollView>
                 {locLoading ? (
                   <ActivityIndicator size="small" color="#007bff" />
                 ) : (
@@ -817,21 +903,14 @@ const TournamentMapPage = ({ route }) => {
 
                     {selectedLocation.oneTimeChecked ? (
                       <View>
-                        <Text style={styles.modalLocation}>
-                          {selectedLocation.date}
-                        </Text>
-                        <Text style={styles.modalLocation}>
-                          At {selectedLocation.time}
-                        </Text>
+                        <ModalTimeConvertComponent selectedLocation={selectedLocation}/>
                       </View>
                     ) : (
                       <View>
                         <Text style={styles.modalLocation}>
-                          Every week starting: {selectedLocation.date}
+                          Weekly, next event:
                         </Text>
-                        <Text style={styles.modalLocation}>
-                          At {selectedLocation.time}
-                        </Text>
+                        <ModalTimeConvertComponent selectedLocation={selectedLocation}/>
                       </View>
                     )}
 
@@ -1142,6 +1221,19 @@ const styles = StyleSheet.create({
   textContainer: {
     justifyContent: "center",
     alignItems: "center",
+  },
+  scrollContainer: {
+    width: '100%',  // Full width of the modal
+  },
+  scrollContentContainer: {
+    paddingBottom: 20,
+    alignItems: 'stretch',  // Make sure the content stretches the full width
+  },
+  dateTimePickerContainer: {
+    width: '100%',           // Ensures the container takes the full width
+    alignItems: 'center',     // Centers the DateTimePickers horizontally
+    justifyContent: 'center', // Optional: centers them vertically within the container
+    marginVertical: 10,       // Adds space above and below the DateTimePickers
   },
 });
 

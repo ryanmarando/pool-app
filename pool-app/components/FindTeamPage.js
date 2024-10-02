@@ -14,12 +14,14 @@ import {
 } from "react-native";
 import { Dialog, Portal, Paragraph } from "react-native-paper";
 import HeroImage from "../billiards-logo.png";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useContext } from "react";
 import { doc, setDoc, collection, getDocs, getDoc } from "firebase/firestore";
 import { db } from "../firebaseConfig";
 import { getAuth } from "firebase/auth";
 import { useNavigation } from "@react-navigation/native";
 import ErrorDialogPortal from "../components/ErrorDialogPortal";
+import axios from "axios";
+import { MapContext } from "./MapContext";
 
 const FindTeamsPage = () => {
   const [modalVisible, setModalVisible] = useState(false);
@@ -27,11 +29,15 @@ const FindTeamsPage = () => {
   const [successMessage, setSuccessMessage] = useState("");
   const [poolTeams, setPoolTeams] = useState([]);
   const [loading, setLoading] = useState(false);
-
+  const [filteredTeams, setFilteredTeams] = useState([]);
+  const [filterSkillLevel, setFilterSkillLevel] = useState('');
   const [newTeam, setNewTeam] = useState({
     name: "",
     skillLevel: "",
     availability: "",
+    location: "",
+    latitude: "",
+    longitude: "",
   });
   const auth = getAuth();
   const user = auth.currentUser;
@@ -41,13 +47,86 @@ const FindTeamsPage = () => {
   const hideDialog = () => setVisible(false);
   const [errorTitle, setErrorTitle] = useState("Error");
   const navigation = useNavigation();
+  const [sortAscending, setSortAscending] = useState(true);
+  const { location } = useContext(MapContext);
+  const [originalTeams, setOriginalTeams] = useState(poolTeams);
+  const [showSignIn, setShowSignIn] = useState(false);
 
   useEffect(() => {
     // Fetch tournament locations from Firestore when component mounts
     fetchPoolTeams();
   }, []);
 
+  const filterTeamsBySkillLevel = (skillLevel) => {
+    if (!skillLevel || isNaN(skillLevel)) {
+      setFilteredTeams(poolTeams); // Reset to full list when no filter or invalid input
+      return;
+    }
+  
+    const skillLevelNum = parseInt(skillLevel, 10);
+  
+    // Sort by proximity to entered skill level
+    const filtered = filteredTeams
+      .filter((team) => team.skillLevel) // Ensure team has a skill level
+      .sort((a, b) => {
+        const diffA = Math.abs(a.skillLevel - skillLevelNum);
+        const diffB = Math.abs(b.skillLevel - skillLevelNum);
+        return diffA - diffB; // Sort by closest skill level
+      });
+  
+    setFilteredTeams(filtered);
+  };
+
+  const haversineDistance = (coords1, coords2) => {
+    const toRad = (x) => (x * Math.PI) / 180;
+    const R = 6371; // Earth's radius in kilometers
+  
+    const dLat = toRad(coords2.latitude - coords1.latitude);
+    const dLon = toRad(coords2.longitude - coords1.longitude);
+  
+    const lat1 = toRad(coords1.latitude);
+    const lat2 = toRad(coords2.latitude);
+  
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c; // Distance in kilometers
+  };
+
+  const sortTeamsByDistance = () => {
+    if (!location || loading) {
+      return;
+    }
+  
+    const sortedTeams = [...filteredTeams].sort((a, b) => {
+      const isValidA = a.latitude && a.longitude;
+      const isValidB = b.latitude && b.longitude;
+    
+      const distanceA = haversineDistance(location.coords, a);
+      const distanceB = haversineDistance(location.coords, b);
+    
+  
+      return distanceA - distanceB; // Sort based on distance
+    });
+  
+    setFilteredTeams(sortedTeams);
+  };
+
+    // Function to reset to the original team order (unsort)
+  const unsortTeams = () => {
+  setFilteredTeams(originalTeams);
+};
+  
   const successMessagePopUp = () => {
+    if (!user) {
+      setErrorTitle("Error");
+      setShowSignIn(true);
+      setError("Please sign in to join a team!" );
+      showDialog();
+      return
+    }
     setErrorTitle("Success");
     setError(
       "The poster has be notified of your interest and may be in contact if they see fit."
@@ -64,6 +143,7 @@ const FindTeamsPage = () => {
         ...doc.data(),
       }));
       setPoolTeams(teams);
+      setFilteredTeams(teams);
       setLoading(false);
       console.log("Loaded pool teams");
     } catch (error) {
@@ -98,7 +178,7 @@ const FindTeamsPage = () => {
   };
 
   const handleAddPoolTeams = async () => {
-    if (!newTeam.name || !newTeam.skillLevel || !newTeam.availability) {
+    if (!newTeam.name || !newTeam.skillLevel || !newTeam.availability || !newTeam.location) {
       setErrorMessage("All fields are required");
       setTimeout(() => setErrorMessage(""), 5000); // Clear success message after 5 seconds
       return;
@@ -106,12 +186,22 @@ const FindTeamsPage = () => {
 
     setLoading(true);
     try {
+      const encodedAddress = encodeURIComponent(newTeam.location);
+      const response = await axios.get(
+        `https://maps.googleapis.com/maps/api/geocode/json?address=${encodedAddress}&key=AIzaSyDlTelzP2AlMephGGLm4BEWgInbEwlkrBM`
+      );
+      const { results } = response.data;
+      const { lat, lng } = results[0].geometry.location;
       const id = Math.floor(Math.random() * 1000000);
+      if (results.length > 0) {
       const teamData = {
         id: id,
         name: newTeam.name,
         skillLevel: newTeam.skillLevel,
         availability: newTeam.availability,
+        location: newTeam.location,
+        latitude: lat,
+        longitude: lng,
       };
       const teamRef = doc(db, "poolTeams", id.toString());
 
@@ -129,7 +219,13 @@ const FindTeamsPage = () => {
         name: "",
         skillLevel: "",
         availability: "",
+        location: "",
       });
+      } else {
+        console.error("Location not found", error);
+        setErrorMessage("Location not found");
+        setTimeout(() => setErrorMessage(""), 5000);
+      }
     } catch (error) {
       console.error("Error adding team post:", error);
       setErrorMessage("Error adding team post");
@@ -156,6 +252,7 @@ const FindTeamsPage = () => {
         Skill Level Wanted: {item.skillLevel}
       </Text>
       <Text style={styles.availability}>Availability: {item.availability}</Text>
+      <Text style={styles.availability}>{item.location}</Text>
       <TouchableOpacity>
         <Text style={styles.joinButton} onPress={successMessagePopUp}>
           Join Team
@@ -173,14 +270,44 @@ const FindTeamsPage = () => {
         />
         <Text style={styles.heroText}>Find a team!</Text>
       </View>
-      <FlatList
-        style={styles.flatListView}
-        data={poolTeams}
-        renderItem={renderTeamItem}
-        keyExtractor={(item) => item.id.toString()}
-        refreshing={loading}
-        onRefresh={fetchPoolTeams}
-      />
+      <View style={[{alignItems: "center", marginTop: 10}]}>
+      <TextInput
+       style={[styles.input, { alignItems: "center" }]} 
+         placeholder="Enter Skill Level"
+         placeholderTextColor="#333"
+          value={filterSkillLevel}
+          onChangeText={(text) => {
+          setFilterSkillLevel(text);
+        filterTeamsBySkillLevel(text); // Trigger filter on input change
+            }}
+  keyboardType="numeric" // Ensure numeric input
+/>
+</View>
+<View style={styles.buttonView}>
+<Button title="Sort by Distance" onPress={sortTeamsByDistance} />
+</View>
+<View style={[styles.buttonView, {marginTop: 10}]}>
+    <Button title="Unsort" onPress={unsortTeams} />
+  </View>
+{filteredTeams.length > 0 ? (
+  <FlatList
+  style={styles.flatListView}
+  data={filteredTeams}
+  renderItem={renderTeamItem}
+  keyExtractor={(item) => item.id.toString()}
+  refreshing={loading}
+  onRefresh={fetchPoolTeams}
+/>
+) : (
+  <FlatList
+    style={styles.flatListView}
+    data={poolTeams}
+    renderItem={renderTeamItem}
+    keyExtractor={(item) => item.id.toString()}
+    refreshing={loading}
+    onRefresh={fetchPoolTeams}
+  />
+)}
       <Modal
         animationType="slide"
         transparent={true}
@@ -204,6 +331,7 @@ const FindTeamsPage = () => {
             onChangeText={(text) =>
               setNewTeam({ ...newTeam, skillLevel: text })
             }
+            keyboardType="numeric"
           />
           <TextInput
             style={styles.input}
@@ -212,6 +340,15 @@ const FindTeamsPage = () => {
             value={newTeam.availability}
             onChangeText={(text) =>
               setNewTeam({ ...newTeam, availability: text })
+            }
+          />
+          <TextInput
+            style={styles.input}
+            placeholder="City"
+            placeholderTextColor="#333" // Darker placeholder color
+            value={newTeam.location}
+            onChangeText={(text) =>
+              setNewTeam({ ...newTeam, location: text })
             }
           />
           {loading ? (
@@ -238,6 +375,7 @@ const FindTeamsPage = () => {
         visible={visible}
         error={error}
         hideDialog={hideDialog}
+        showSignIn={showSignIn}
       />
     </View>
   );
@@ -335,7 +473,7 @@ const styles = StyleSheet.create({
     borderColor: "gray",
     borderWidth: 1,
     marginBottom: 12,
-    width: "100%",
+    width: "90%",
     paddingLeft: 8,
   },
   errorMessage: {

@@ -3,7 +3,7 @@ import { Dialog, Portal, Paragraph } from "react-native-paper";
 import { useNavigation } from "@react-navigation/native";
 import { Button } from "react-native";
 
-const ErrorDialogPortal = ({ title, error, visible, hideDialog }) => {
+const ErrorDialogPortal = ({ title, error, visible, hideDialog, showSignIn }) => {
   const navigation = useNavigation();
 
   return (
@@ -17,6 +17,7 @@ const ErrorDialogPortal = ({ title, error, visible, hideDialog }) => {
           <Button title="Ok" onPress={hideDialog}>
             OK
           </Button>
+        {showSignIn && (
           <Button
             title="Sign In"
             onPress={() => {
@@ -26,6 +27,7 @@ const ErrorDialogPortal = ({ title, error, visible, hideDialog }) => {
           >
             Sign In
           </Button>
+          )}
         </Dialog.Actions>
       </Dialog>
     </Portal>

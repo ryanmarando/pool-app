@@ -22,6 +22,7 @@ const HomeScreen = () => {
   const showDialog = () => setVisible(true);
   const hideDialog = () => setVisible(false);
   const errorTitle = "Error";
+  const showSignIn = true;
 
   useFocusEffect(
     useCallback(() => {
@@ -106,6 +107,7 @@ const HomeScreen = () => {
         visible={visible}
         error={error}
         hideDialog={hideDialog}
+        showSignIn={showSignIn}
       />
     </View>
   );

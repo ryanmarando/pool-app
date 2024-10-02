@@ -16,6 +16,7 @@ import {
   updateDoc,
   arrayRemove,
   setDoc,
+  Timestamp,
 } from "firebase/firestore";
 import { db } from "../firebaseConfig";
 import Icon from "react-native-vector-icons/FontAwesome";
@@ -122,6 +123,13 @@ const ProfileScreen = ({ navigation }) => {
                 return tournamentDoc.data();
               } else {
                 console.log(`No posted document found for ID: ${idStr}`);
+                const userRef = doc(db, "users", user.uid);
+                // Only call arrayRemove if id is not null or undefined
+                await updateDoc(userRef, {
+                  TournamentsId: arrayRemove(id),
+                });
+
+                console.log(`Deleted posted with ID: ${id}`);
                 return null;
               }
             } catch (error) {
@@ -275,14 +283,34 @@ const ProfileScreen = ({ navigation }) => {
     }
   };
 
+  const ModalTimeConvertComponent = ({ selectedLocation }) => {
+    // Check if selectedLocation is defined and has dateTime
+    const dateTime = selectedLocation?.dateTime 
+        ? selectedLocation.dateTime.toDate() // Convert Firestore timestamp to Date
+        : null;
+
+    return (
+        <View>
+             {dateTime instanceof Date && !isNaN(dateTime) ? (
+                <Text style={styles.tournamentTime}>
+                    {dateTime.toLocaleDateString()} at {dateTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}
+                </Text>
+            ) : (
+                <Text style={styles.tournamentTime}>No end date</Text>
+            )}
+        </View>
+    );
+};
+
   const renderTeamItem = ({ item }) => (
     <View style={styles.teamItem}>
       {item ? (
         <>
           <View style={styles.teamInfo}>
-            <Text style={styles.teamName}>Team Name: {item.name}</Text>
+            <Text style={styles.teamName}>{item.name}</Text>
             <Text>Skill Level: {item.skillLevel}</Text>
             <Text>Availability: {item.availability}</Text>
+            <Text>{item.location}</Text>
           </View>
           <View style={styles.deleteButtonContainer}>
             <Button
@@ -309,10 +337,7 @@ const ProfileScreen = ({ navigation }) => {
           <View style={styles.teamInfo}>
             <Text style={styles.teamName}>{item.title}</Text>
             <Text>Description: {item.description}</Text>
-            <Text>
-              {item.date} at {item.time}
-            </Text>
-            <Text>{item.location}</Text>
+            <ModalTimeConvertComponent selectedLocation={item} />
           </View>
           <View style={styles.deleteButtonContainer}>
             <Button
@@ -335,10 +360,7 @@ const ProfileScreen = ({ navigation }) => {
           <View style={styles.teamInfo}>
             <Text style={styles.teamName}>{item.title}</Text>
             <Text>Description: {item.description}</Text>
-            <Text>
-              {item.date} at {item.time}
-            </Text>
-            <Text>{item.location}</Text>
+            <ModalTimeConvertComponent selectedLocation={item} />
           </View>
           <View style={styles.deleteButtonContainer}>
             <TouchableOpacity
