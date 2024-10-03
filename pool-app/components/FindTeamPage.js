@@ -11,11 +11,12 @@ import {
   TextInput,
   ActivityIndicator,
   TouchableOpacity,
+  Linking
 } from "react-native";
 import { Dialog, Portal, Paragraph } from "react-native-paper";
 import HeroImage from "../billiards-logo.png";
 import { useState, useEffect, useContext } from "react";
-import { doc, setDoc, collection, getDocs, getDoc } from "firebase/firestore";
+import { doc, setDoc, collection, getDocs, getDoc, updateDoc, arrayUnion, query, where } from "firebase/firestore";
 import { db } from "../firebaseConfig";
 import { getAuth } from "firebase/auth";
 import { useNavigation } from "@react-navigation/native";
@@ -37,7 +38,7 @@ const FindTeamsPage = () => {
     availability: "",
     location: "",
     latitude: "",
-    longitude: "",
+    longitude: ""
   });
   const auth = getAuth();
   const user = auth.currentUser;
@@ -46,16 +47,76 @@ const FindTeamsPage = () => {
   const showDialog = () => setVisible(true);
   const hideDialog = () => setVisible(false);
   const [errorTitle, setErrorTitle] = useState("Error");
-  const navigation = useNavigation();
-  const [sortAscending, setSortAscending] = useState(true);
   const { location } = useContext(MapContext);
   const [originalTeams, setOriginalTeams] = useState(poolTeams);
   const [showSignIn, setShowSignIn] = useState(false);
+  const [userData, setUserData] = useState();
+  const [isTeamModalVisible, setTeamModalVisible] = useState(false);
+  const [userJoinData, setUserJoinData] = useState([]);
+
+  const openModal = () => {
+    setTeamModalVisible(true);
+    fetchJoinData();
+  };
+  
 
   useEffect(() => {
     // Fetch tournament locations from Firestore when component mounts
     fetchPoolTeams();
+    if (user) {
+      getUserData();
+      fetchJoinData();
+    }
   }, []);
+
+  const fetchJoinData = async () => {
+    // Check if the user is logged in
+    if (!userData) {
+      console.log("User is not defined");
+      return; // Exit if user is not defined
+    }
+  
+    const userPoolTeamsIds = userData.PoolTeamsId; // Get user's PoolTeamsId
+    if (!userPoolTeamsIds) {
+      return
+    }
+  
+    try {
+      const querySnapshot = await getDocs(collection(db, "poolTeams"));
+      const updatedJoinData = [];
+  
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        const docId = doc.id; // Document ID
+        const userPoolTeamsIdsString = userPoolTeamsIds.map(String); // Ensure userPoolTeamsIds are strings
+  
+        console.log("Current document ID:", docId);
+        console.log("User Pool Teams IDs:", userPoolTeamsIdsString); // Log the pool teams IDs
+  
+        // Check if the current document's ID is in the user's PoolTeamsIds array
+        if (Array.isArray(userPoolTeamsIdsString) && userPoolTeamsIdsString.includes(docId)) {
+          console.log("Found matching document ID:", docId);
+          
+          if (data.userJoinData) {
+            updatedJoinData.push(...data.userJoinData);
+          }
+        } else {
+          console.log("No match found for document ID:", docId);
+        }
+      });
+      setUserJoinData(updatedJoinData);
+    } catch (error) {
+      console.error("Error fetching join data:", error);
+    }
+  };
+
+
+  async function getUserData() {
+    const userDoc = await getDoc(doc(db, "users", user.uid));
+    const data = userDoc.data();
+    setUserData(data)
+  }
+
 
   const filterTeamsBySkillLevel = (skillLevel) => {
     if (!skillLevel || isNaN(skillLevel)) {
@@ -119,27 +180,47 @@ const FindTeamsPage = () => {
   setFilteredTeams(originalTeams);
 };
   
-  const successMessagePopUp = () => {
-    if (!user) {
+const successMessagePopUp = async (id) => {
+  if (!user) {
       setErrorTitle("Error");
       setShowSignIn(true);
-      setError("Please sign in to join a team!" );
+      setError("Please sign in to join a team!");
       showDialog();
-      return
-    }
-    setErrorTitle("Success");
-    setError(
-      "The poster has be notified of your interest and may be in contact if they see fit."
-    );
-    showDialog();
+      return;
+  }
+  const teamDocRef = doc(db, "poolTeams", String(id));
+  const userSnap = await getDoc(teamDocRef);
+  const userTeamData = userSnap.data();
+
+  const joinerDetails = {
+    uid: user.uid,
+    name: userData.firstName,
+    email: userData.email,
+    posterName: userTeamData.name,
   };
+
+  try {
+    // Update the poolTeams collection by adding userJoinData to a specific team
+    await updateDoc(teamDocRef, {
+      userJoinData: arrayUnion(joinerDetails) // Add the joinerDetails object to the array
+    });
+   } catch (error) {
+      console.error("Error posting data or sending email: ", error);
+      setErrorTitle("Error");
+      setError("There was an issue sending the request. Please try again.");
+    }
+  setErrorTitle("Success");
+  setError("The poster has been notified of your interest and may be in contact if they see fit.");
+  showDialog();
+  fetchPoolTeams();
+};
 
   const fetchPoolTeams = async () => {
     setLoading(true);
     try {
       const querySnapshot = await getDocs(collection(db, "poolTeams"));
       const teams = querySnapshot.docs.map((doc) => ({
-        id: doc.id,
+        id: doc.id, 
         ...doc.data(),
       }));
       setPoolTeams(teams);
@@ -245,6 +326,25 @@ const FindTeamsPage = () => {
     }
   };
 
+  const renderJoinRequestItem = ({ item }) => ( // Destructure 'item' correctly here
+    <View>
+      <Text>Team Posting: {item.posterName}</Text>
+      <Text>{item.name} is interested!</Text>
+      <Text>{item.email ? item.email : 'Email not available'}</Text> 
+      <Button title="Email User" onPress={() => emailUser(item.email)} disabled={!item.email} />
+    </View>
+  );
+
+  const emailUser = (userEmail) => {
+    // Construct the mailto link
+    const subject = encodeURIComponent('Join Request');
+    const body = encodeURIComponent('I am interested in joining your team.'); // Customize this message
+    const mailtoLink = `mailto:${userEmail}?subject=${subject}&body=${body}`;
+    
+    // Open the email app
+    Linking.openURL(mailtoLink).catch(err => console.error('Error opening email', err));
+  };
+
   const renderTeamItem = ({ item }) => (
     <View style={styles.teamItem}>
       <Text style={styles.teamName}>{item.name}</Text>
@@ -254,12 +354,19 @@ const FindTeamsPage = () => {
       <Text style={styles.availability}>Availability: {item.availability}</Text>
       <Text style={styles.availability}>{item.location}</Text>
       <TouchableOpacity>
-        <Text style={styles.joinButton} onPress={successMessagePopUp}>
-          Join Team
-        </Text>
+      {
+  !user || !item.userJoinData || !item.userJoinData.some(joinData => joinData.uid === user.uid) ? (
+    <Text style={styles.joinButton} onPress={() => successMessagePopUp(item.id)}>
+      Join Team
+    </Text>
+  ) : (
+    <Text style={styles.joinButton}>Request Sent</Text>
+  )
+}
       </TouchableOpacity>
     </View>
   );
+
 
   return (
     <View style={styles.container}>
@@ -270,6 +377,10 @@ const FindTeamsPage = () => {
         />
         <Text style={styles.heroText}>Find a team!</Text>
       </View>
+      {userData && (
+  <Button title="View Join Requests" onPress={openModal} />
+)}
+
       <View style={[{alignItems: "center", marginTop: 10}]}>
       <TextInput
        style={[styles.input, { alignItems: "center" }]} 
@@ -377,6 +488,31 @@ const FindTeamsPage = () => {
         hideDialog={hideDialog}
         showSignIn={showSignIn}
       />
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={isTeamModalVisible}
+        onRequestClose={() => setTeamModalVisible(false)}
+      >
+         <View style={styles.modalView}>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Join Requests</Text>
+             {userJoinData.length === 0 ? ( // Check if userJoinData is empty
+        <Text>No requests</Text>
+      ) : (
+        <FlatList
+          data={userJoinData}
+          keyExtractor={(item) => item.uid}
+          renderItem={renderJoinRequestItem}
+        />
+      )}
+            <Button title="Close" onPress={() => setTeamModalVisible(false)} />
+          </View>
+        </View>
+        </View>
+      </Modal>
+
     </View>
   );
 };

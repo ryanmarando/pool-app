@@ -46,6 +46,7 @@ const ProfileScreen = ({ navigation }) => {
           fetchFavoriteTournaments(data.FavoriteTournamentsId);
         } else {
           console.log("FavoriteTournamentsId is not an array or is undefined.");
+          setIsLoading(false);
         }
 
         // Team Postings
@@ -53,6 +54,7 @@ const ProfileScreen = ({ navigation }) => {
           fetchPoolTeams(data.PoolTeamsId);
         } else {
           console.log("PoolTeamsId is not an array or is undefined.");
+          setIsLoading(false);
         }
 
         // Tournament Postings
@@ -60,6 +62,7 @@ const ProfileScreen = ({ navigation }) => {
           fetchPostedTournaments(data.TournamentsId);
         } else {
           console.log("TournamentsId is not an array or is undefined.");
+          setIsLoading(false);
         }
       } else {
         console.log("No such document!");
