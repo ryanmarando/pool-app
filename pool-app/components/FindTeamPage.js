@@ -15,11 +15,11 @@ import {
 } from "react-native";
 import { Dialog, Portal, Paragraph } from "react-native-paper";
 import HeroImage from "../billiards-logo.png";
-import { useState, useEffect, useContext } from "react";
+import { useState, useEffect, useContext, useCallback } from "react";
 import { doc, setDoc, collection, getDocs, getDoc, updateDoc, arrayUnion, query, where } from "firebase/firestore";
 import { db } from "../firebaseConfig";
 import { getAuth } from "firebase/auth";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import ErrorDialogPortal from "../components/ErrorDialogPortal";
 import axios from "axios";
 import { MapContext } from "./MapContext";
@@ -54,25 +54,32 @@ const FindTeamsPage = () => {
   const [isTeamModalVisible, setTeamModalVisible] = useState(false);
   const [userJoinData, setUserJoinData] = useState([]);
 
+  useFocusEffect(
+    useCallback(() => {
+      setLoading(true)
+      const user = auth.currentUser;
+          // Fetch tournament locations from Firestore when component mounts
+      fetchPoolTeams();
+      if (user) {
+        getUserData();
+        fetchJoinData();
+      }
+      setLoading(false)
+    }, [])
+  );
+
   const openModal = () => {
     setTeamModalVisible(true);
     fetchJoinData();
   };
   
 
-  useEffect(() => {
-    // Fetch tournament locations from Firestore when component mounts
-    fetchPoolTeams();
-    if (user) {
-      getUserData();
-      fetchJoinData();
-    }
-  }, []);
+
 
   const fetchJoinData = async () => {
     // Check if the user is logged in
     if (!userData) {
-      console.log("User is not defined");
+      console.log("User is not defined for fetching joined data");
       return; // Exit if user is not defined
     }
   
@@ -327,7 +334,7 @@ const successMessagePopUp = async (id) => {
   };
 
   const renderJoinRequestItem = ({ item }) => ( // Destructure 'item' correctly here
-    <View>
+    <View style={styles.tournamentItem}>
       <Text>Team Posting: {item.posterName}</Text>
       <Text>{item.name} is interested!</Text>
       <Text>{item.email ? item.email : 'Email not available'}</Text> 
@@ -355,14 +362,27 @@ const successMessagePopUp = async (id) => {
       <Text style={styles.availability}>{item.location}</Text>
       <TouchableOpacity>
       {
-  !user || !item.userJoinData || !item.userJoinData.some(joinData => joinData.uid === user.uid) ? (
+  !user || loading || !userData || !item.userJoinData ? (
     <Text style={styles.joinButton} onPress={() => successMessagePopUp(item.id)}>
       Join Team
     </Text>
   ) : (
-    <Text style={styles.joinButton}>Request Sent</Text>
+    userData.PoolTeamsId && userData.PoolTeamsId.includes(item.id) ? (
+      // Display nothing if item.id is in userData.PoolTeamsId
+      <Text  style={styles.joinButton}>Your Post</Text>
+    ) : (
+      // Show "Join Team" or "Request Sent" based on whether the user has already sent a request
+      item.userJoinData.some(joinData => joinData.uid === user.uid) ? (
+        <Text style={styles.joinButton}>Request Sent</Text>
+      ) : (
+        <Text style={styles.joinButton} onPress={() => successMessagePopUp(item.id)}>
+          Join Team
+        </Text>
+      )
+    )
   )
 }
+
       </TouchableOpacity>
     </View>
   );
@@ -377,14 +397,15 @@ const successMessagePopUp = async (id) => {
         />
         <Text style={styles.heroText}>Find a team!</Text>
       </View>
-      {userData && (
+      <View style={styles.buttonView}>
+      {user && (
   <Button title="View Join Requests" onPress={openModal} />
 )}
-
+    </View>
       <View style={[{alignItems: "center", marginTop: 10}]}>
       <TextInput
        style={[styles.input, { alignItems: "center" }]} 
-         placeholder="Enter Skill Level"
+         placeholder="Enter Your Skill Level"
          placeholderTextColor="#333"
           value={filterSkillLevel}
           onChangeText={(text) => {
@@ -550,6 +571,7 @@ const styles = StyleSheet.create({
     marginTop: 50,
     width: "100%",
     justifyContent: "center",
+    marginBottom: 10,
   },
   heroImage: {
     width: 50,
@@ -622,6 +644,12 @@ const styles = StyleSheet.create({
   },
   buttonView: {
     backgroundColor: "lightgrey",
+  },
+  tournamentItem: {
+    borderBottomWidth: 1,
+    borderBottomColor: "#ccc",
+    paddingVertical: 10,
+    width: "100%",
   },
 });
 
