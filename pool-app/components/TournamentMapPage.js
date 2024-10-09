@@ -537,6 +537,9 @@ const TournamentMapPage = ({ route }) => {
 
   const fetchFavoriteTournaments = async (tournamentIds) => {
     console.log("Fetching favorite tournament IDs:", tournamentIds);
+    if (!tournamentIds) {
+      return console.log("No favorites to report")
+    }
     try {
       const tournaments = await Promise.all(
         tournamentIds.map(async (id) => {

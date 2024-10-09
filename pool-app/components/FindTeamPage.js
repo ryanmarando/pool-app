@@ -40,8 +40,8 @@ const FindTeamsPage = () => {
     latitude: "",
     longitude: ""
   });
-  const auth = getAuth();
-  const user = auth.currentUser;
+  let auth = getAuth();
+  let user = auth.currentUser;
   const [visible, setVisible] = useState(false);
   const [error, setError] = useState("");
   const showDialog = () => setVisible(true);
@@ -50,21 +50,22 @@ const FindTeamsPage = () => {
   const { location } = useContext(MapContext);
   const [originalTeams, setOriginalTeams] = useState(poolTeams);
   const [showSignIn, setShowSignIn] = useState(false);
-  const [userData, setUserData] = useState();
+  const [userData, setUserData] = useState(null);
   const [isTeamModalVisible, setTeamModalVisible] = useState(false);
   const [userJoinData, setUserJoinData] = useState([]);
 
   useFocusEffect(
     useCallback(() => {
       setLoading(true)
-      const user = auth.currentUser;
+      auth = getAuth();
+      user = auth.currentUser;
           // Fetch tournament locations from Firestore when component mounts
       fetchPoolTeams();
       if (user) {
         getUserData();
         fetchJoinData();
       }
-      setLoading(false)
+      setLoading(false);
     }, [])
   );
 
@@ -72,22 +73,22 @@ const FindTeamsPage = () => {
     setTeamModalVisible(true);
     fetchJoinData();
   };
-  
-
 
 
   const fetchJoinData = async () => {
+    setUserJoinData([]);
     // Check if the user is logged in
-    if (!userData) {
-      console.log("User is not defined for fetching joined data");
+    if (!user || !userData) {
+      console.log("User or userData is not defined for fetching joined data");
       return; // Exit if user is not defined
     }
   
-    const userPoolTeamsIds = userData.PoolTeamsId; // Get user's PoolTeamsId
-    if (!userPoolTeamsIds) {
+    if (!userData.PoolTeamsId) {
+      console.log("PoolTeamsId is not defined for fetching joined data");
       return
     }
   
+    const userPoolTeamsIds = userData.PoolTeamsId; // Get user's PoolTeamsId
     try {
       const querySnapshot = await getDocs(collection(db, "poolTeams"));
       const updatedJoinData = [];
@@ -119,6 +120,7 @@ const FindTeamsPage = () => {
 
 
   async function getUserData() {
+    setUserData(null);
     const userDoc = await getDoc(doc(db, "users", user.uid));
     const data = userDoc.data();
     setUserData(data)
@@ -218,7 +220,9 @@ const successMessagePopUp = async (id) => {
     }
   setErrorTitle("Success");
   setError("The poster has been notified of your interest and may be in contact if they see fit.");
+  setShowSignIn(false)
   showDialog();
+  getUserData()
   fetchPoolTeams();
 };
 
@@ -335,9 +339,9 @@ const successMessagePopUp = async (id) => {
 
   const renderJoinRequestItem = ({ item }) => ( // Destructure 'item' correctly here
     <View style={styles.tournamentItem}>
-      <Text>Team Posting: {item.posterName}</Text>
-      <Text>{item.name} is interested!</Text>
-      <Text>{item.email ? item.email : 'Email not available'}</Text> 
+      <Text style={styles.modalText}>Team Posting: {item.posterName}</Text>
+      <Text style={styles.modalText}>{item.name} is interested!</Text>
+      <Text style={styles.modalText}>{item.email ? item.email : 'Email not available'}</Text> 
       <Button title="Email User" onPress={() => emailUser(item.email)} disabled={!item.email} />
     </View>
   );
@@ -362,19 +366,21 @@ const successMessagePopUp = async (id) => {
       <Text style={styles.availability}>{item.location}</Text>
       <TouchableOpacity>
       {
-  !user || loading || !userData || !item.userJoinData ? (
+  !user ? (
+    // If loading or no user, show "Join Team"
     <Text style={styles.joinButton} onPress={() => successMessagePopUp(item.id)}>
       Join Team
     </Text>
   ) : (
-    userData.PoolTeamsId && userData.PoolTeamsId.includes(item.id) ? (
-      // Display nothing if item.id is in userData.PoolTeamsId
-      <Text  style={styles.joinButton}>Your Post</Text>
+    // Check if user's ID is in item.userJoinData (request already sent)
+    item.userJoinData && item.userJoinData.some(joinData => joinData.uid === user.uid) ? (
+      <Text style={styles.joinButton}>Request Sent</Text>
     ) : (
-      // Show "Join Team" or "Request Sent" based on whether the user has already sent a request
-      item.userJoinData.some(joinData => joinData.uid === user.uid) ? (
-        <Text style={styles.joinButton}>Request Sent</Text>
+      // If userData.PoolTeamsId exists and includes item.id, show "Your Post"
+      userData?.PoolTeamsId?.includes(item.id) ? (
+        <Text style={styles.joinButton}>Your Post</Text>
       ) : (
+        // If no request sent and not part of PoolTeamsId, show "Join Team"
         <Text style={styles.joinButton} onPress={() => successMessagePopUp(item.id)}>
           Join Team
         </Text>
@@ -382,11 +388,9 @@ const successMessagePopUp = async (id) => {
     )
   )
 }
-
       </TouchableOpacity>
     </View>
   );
-
 
   return (
     <View style={styles.container}>
@@ -450,15 +454,15 @@ const successMessagePopUp = async (id) => {
           <Text style={styles.modalTextViewHeader}>Add your pool team:</Text>
           <TextInput
             style={styles.input}
-            placeholder="Team Name"
-            placeholderTextColor="#333" // Darker placeholder color
+            placeholder="Team Name*"
+            placeholderTextColor="lightgrey"
             value={newTeam.name}
             onChangeText={(text) => setNewTeam({ ...newTeam, name: text })}
           />
           <TextInput
             style={styles.input}
-            placeholder="Skill Level Wanted"
-            placeholderTextColor="#333" // Darker placeholder color
+            placeholder="Skill Level Wanted*"
+            placeholderTextColor="lightgrey"
             value={newTeam.skillLevel}
             onChangeText={(text) =>
               setNewTeam({ ...newTeam, skillLevel: text })
@@ -467,8 +471,8 @@ const successMessagePopUp = async (id) => {
           />
           <TextInput
             style={styles.input}
-            placeholder="Availability"
-            placeholderTextColor="#333" // Darker placeholder color
+            placeholder="Availability*"
+            placeholderTextColor="lightgrey"
             value={newTeam.availability}
             onChangeText={(text) =>
               setNewTeam({ ...newTeam, availability: text })
@@ -476,8 +480,8 @@ const successMessagePopUp = async (id) => {
           />
           <TextInput
             style={styles.input}
-            placeholder="City"
-            placeholderTextColor="#333" // Darker placeholder color
+            placeholder="City*"
+            placeholderTextColor="lightgrey"
             value={newTeam.location}
             onChangeText={(text) =>
               setNewTeam({ ...newTeam, location: text })
@@ -488,7 +492,7 @@ const successMessagePopUp = async (id) => {
           ) : (
             <>
               <Button title="Add Your Team" onPress={handleAddPoolTeams} />
-              <Button title="Cancel" onPress={() => setModalVisible(false)} />
+              <Button title="Cancel" color="red" onPress={() => setModalVisible(false)} />
             </>
           )}
           {errorMessage && (
@@ -524,11 +528,11 @@ const successMessagePopUp = async (id) => {
       ) : (
         <FlatList
           data={userJoinData}
-          keyExtractor={(item) => item.uid}
+          keyExtractor={(item) => item.id}
           renderItem={renderJoinRequestItem}
         />
       )}
-            <Button title="Close" onPress={() => setTeamModalVisible(false)} />
+            <Button title="Close" color="red" onPress={() => setTeamModalVisible(false)} />
           </View>
         </View>
         </View>
@@ -545,6 +549,9 @@ const styles = StyleSheet.create({
   },
   flatListView: {
     padding: 15,
+    paddingTop: -15,
+    marginTop: 15,
+    marginBottom: 15,
   },
   teamItem: {
     backgroundColor: "#fff",
@@ -595,7 +602,8 @@ const styles = StyleSheet.create({
     paddingBottom: 15,
     paddingTop: 15,
     alignItems: "center",
-    shadowColor: "#000",
+    backgroundColor: "#3a3f44",
+    shadowColor: "white",
     shadowOffset: {
       width: 0,
       height: 2,
@@ -607,13 +615,14 @@ const styles = StyleSheet.create({
   modalContent: {
     width: 300,
     padding: 10,
-    backgroundColor: "white",
+    backgroundColor: "#3a3f44",
     borderRadius: 10,
     alignItems: "center",
   },
   modalTitle: {
     fontSize: 20,
     fontWeight: "bold",
+    color: "white",
     marginBottom: 10,
   },
   modalDescription: {
@@ -625,14 +634,16 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     fontSize: 24,
     marginBottom: 15,
+    color:"white",
   },
   input: {
     height: 40,
-    borderColor: "gray",
+    borderColor: "white",
     borderWidth: 1,
     marginBottom: 12,
-    width: "90%",
+    width: "100%",
     paddingLeft: 8,
+    color: "white",
   },
   errorMessage: {
     color: "red",
@@ -650,6 +661,13 @@ const styles = StyleSheet.create({
     borderBottomColor: "#ccc",
     paddingVertical: 10,
     width: "100%",
+    color: "white"
+  },
+  modalText: {
+    fontSize: 14,
+    marginBottom: 2,
+    textAlign: "center",
+    color: "white",
   },
 });
 
