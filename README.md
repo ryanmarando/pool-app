@@ -44,20 +44,6 @@ npx expo start
 *     
   * Use the Expo Go app on your mobile device to scan the QR code and view the app.
 
-4. Backend Setup:
-- Navigate to the backend directory:
-```
-cd backend
-```
-- Install dependencies:
-```
-npm install
-```
-- Start the backend server:
-```
-npm run start
-```
-
 ## Usage
 - **Create a Tournament**: Use the app to create tournaments by specifying details like date, time, and location.
 - **Filter by Skill Level**: Find players or teams matching the required skill level.
